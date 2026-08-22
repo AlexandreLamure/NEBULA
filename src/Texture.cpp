@@ -1,7 +1,7 @@
 #include "Texture.h"
 #include "Program.h"
 
-#include <glad/gl.h>
+#include <volk.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>

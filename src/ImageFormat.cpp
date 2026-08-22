@@ -1,6 +1,6 @@
 #include "ImageFormat.h"
 
-#include <glad/gl.h>
+#include <volk.h>
 
 namespace OM3D {
 

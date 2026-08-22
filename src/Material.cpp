@@ -1,6 +1,6 @@
 #include "Material.h"
 
-#include <glad/gl.h>
+#include <volk.h>
 
 #include <algorithm>
 

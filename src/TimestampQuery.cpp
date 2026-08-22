@@ -4,7 +4,7 @@
 #include <deque>
 #include <vector>
 
-#include <glad/gl.h>
+#include <volk.h>
 
 namespace OM3D {
 

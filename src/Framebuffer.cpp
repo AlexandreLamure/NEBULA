@@ -2,7 +2,7 @@
 
 #include <glm/vec4.hpp>
 
-#include <glad/gl.h>
+#include <volk.h>
 
 namespace OM3D {
 

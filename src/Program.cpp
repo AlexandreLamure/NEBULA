@@ -1,6 +1,6 @@
 #include "Program.h"
 
-#include <glad/gl.h>
+#include <volk.h>
 
 #include <algorithm>
 #include <unordered_set>
