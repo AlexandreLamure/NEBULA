@@ -1,16 +1,14 @@
+#include "VkContext.h"
 #include "graphics.h"
 
-#include "ImageFormat.h"
 #include "Texture.h"
-#include "Program.h"
 #include "TimestampQuery.h"
-
-#include <volk.h>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
 #include <iostream>
+#include <vector>
 #include <cstring>
 
 namespace OM3D {
@@ -86,10 +84,8 @@ bool bindless_enabled() {
     return GLAD_GL_ARB_bindless_texture != 0;
 }
 
-void init_graphics() {
-    ALWAYS_ASSERT(gladLoadGL(glfwGetProcAddress), "glad initialization failed");
-
-    std::cout << "OpenGL " << glGetString(GL_VERSION) << " initialized on " << glGetString(GL_VENDOR) << " " << glGetString(GL_RENDERER) << " using GLSL " << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
+void init_graphics(GLFWwindow* window) {
+    vk_init(window);
 
     glClearColor(0.5f, 0.7f, 0.8f, 0.0f);
 
@@ -168,6 +164,8 @@ void destroy_graphics() {
     brdf_lut_texture = {};
     default_textures = {};
     profile::destroy_profile();
+
+    vk_destroy();
 }
 
 const Texture& brdf_lut() {

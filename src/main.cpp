@@ -4,6 +4,7 @@
 #include <GLFW/glfw3.h>
 
 #include <graphics.h>
+#include <VkContext.h>
 #include <Scene.h>
 #include <Texture.h>
 #include <Framebuffer.h>
@@ -236,7 +237,7 @@ void gui(ImGuiRenderer& imgui) {
         }
 
         ImGui::Separator();
-        ImGui::TextUnformatted(reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
+        ImGui::TextUnformatted(device_name().c_str());
 
         ImGui::Separator();
         ImGui::Text("%.2f ms", delta_time * 1000.0f);
@@ -404,18 +405,13 @@ int main(int argc, char** argv) {
     glfw_check(glfwInit());
     DEFER(glfwTerminate());
 
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
     GLFWwindow* window = glfwCreateWindow(1600, 900, "OM3D", nullptr, nullptr);
     glfw_check(window);
     DEFER(glfwDestroyWindow(window));
 
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(1); // Enable vsync
-    init_graphics();
+    init_graphics(window);
 
     std::unique_ptr<ImGuiRenderer> imgui = std::make_unique<ImGuiRenderer>(window);
 
@@ -480,12 +476,10 @@ int main(int argc, char** argv) {
             // Draw GUI on top
             gui(*imgui);
         }
-
-        glfwSwapBuffers(window);
     }
 
 
-    // destroy scene and child OpenGL objects
+    // Destroy scene and child graphics objects before tearing down the device.
     scene = nullptr;
     envmap = nullptr;
     imgui = nullptr;

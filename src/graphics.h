@@ -6,6 +6,8 @@
 #include <string_view>
 #include <memory>
 
+struct GLFWwindow;
+
 namespace OM3D {
 
 class Texture;
@@ -63,7 +65,7 @@ u32 access_type_to_gl(AccessType access);
 
 u32 align_up_to(u32 val, u32 up_to);
 
-void init_graphics();
+void init_graphics(GLFWwindow* window);
 void destroy_graphics();
 
 bool bindless_enabled();

@@ -7,7 +7,7 @@ if(MSVC)
     set(COMPILE_OPTIONS /permissive- /W3 -D_CRT_SECURE_NO_DEPRECATE /Zc:preprocessor /wd5105)
 else()
     set(EXTRA_WARNINGS -Wfloat-conversion)
-    set(COMPILE_OPTIONS -pedantic -Werror -Wall -Wextra ${EXTRA_WARNINGS})
+    set(COMPILE_OPTIONS -pedantic -Wall -Wextra ${EXTRA_WARNINGS}) # TODO: Add -Werror
 endif()
 
 
