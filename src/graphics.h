@@ -68,6 +68,9 @@ u32 align_up_to(u32 val, u32 up_to);
 void init_graphics(GLFWwindow* window);
 void destroy_graphics();
 
+void begin_frame();
+void end_frame();
+
 bool bindless_enabled();
 
 void audit_bindings();

@@ -444,6 +444,8 @@ int main(int argc, char** argv) {
             process_inputs(window, scene->camera());
         }
 
+        begin_frame();
+
         // Draw everything
         {
             PROFILE_GPU("Frame");
@@ -476,6 +478,8 @@ int main(int argc, char** argv) {
             // Draw GUI on top
             gui(*imgui);
         }
+
+        end_frame();
     }
 
 

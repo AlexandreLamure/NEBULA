@@ -10,10 +10,21 @@
 #include <vk_mem_alloc.h>
 
 #include <string>
+#include <vector>
 
 struct GLFWwindow;
 
 namespace OM3D {
+
+static constexpr u32 frames_in_flight = 2;
+
+struct InFlightFrame {
+    VkCommandPool command_pool = VK_NULL_HANDLE;
+    VkCommandBuffer command_buffer = VK_NULL_HANDLE;
+    VkFence submitted = VK_NULL_HANDLE;
+    VkSemaphore acquire = VK_NULL_HANDLE;
+    VkSemaphore render = VK_NULL_HANDLE;
+};
 
 // Singleton containing the Vulkan context.
 struct GraphicsContext {
@@ -32,6 +43,18 @@ struct GraphicsContext {
     VmaAllocator allocator = VK_NULL_HANDLE;
 
     std::string device_name;
+
+    VkSwapchainKHR swapchain = VK_NULL_HANDLE;
+    VkFormat swapchain_format = VK_FORMAT_B8G8R8A8_SRGB;
+    VkExtent2D swapchain_extent = {};
+    std::vector<VkImage> swapchain_images;
+    std::vector<VkImageView> swapchain_views;
+
+    InFlightFrame frames[frames_in_flight] = {};
+    u32 frame_index = 0;
+    u32 image_index = 0;
+    bool frame_active = false;
+    bool rendering_active = false;
 };
 GraphicsContext& ctx();
 
@@ -46,6 +69,8 @@ inline u32 vk_queue_family() { return ctx().graphics_queue_family; }
 inline VkSurfaceKHR vk_surface() { return ctx().surface; }
 inline VmaAllocator device_allocator() { return ctx().allocator; }
 inline const std::string& device_name() { return ctx().device_name; }
+inline VkCommandBuffer vk_command_buffer() { return ctx().frames[ctx().frame_index].command_buffer; }
+inline u32 vk_frame_index() { return ctx().frame_index; }
 
 inline void vk_check(VkResult result) {
     ALWAYS_ASSERT(result == VK_SUCCESS, "Vulkan call failed");
