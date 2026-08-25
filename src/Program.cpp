@@ -1,181 +1,366 @@
 #include "Program.h"
 
-#include <volk.h>
+#include "VkContext.h"
+#include "Vertex.h"
 
-#include <algorithm>
-#include <unordered_set>
+#include <cstddef>
+#include <cstdio>
+#include <cstring>
 #include <unordered_map>
+#include <vector>
 
 namespace OM3D {
 
-static std::string read_shader(const std::string& file_name, Span<const std::string> defines = {}) {
-    const std::string full_path = std::string(shader_path) + file_name;
+static_assert(offsetof(PushConstants, model) == 0);
+static_assert(offsetof(PushConstants, base_color_factor) == 64);
+static_assert(offsetof(PushConstants, alpha_cutoff) == 76);
+static_assert(offsetof(PushConstants, metal_rough_factor) == 80);
+static_assert(offsetof(PushConstants, viewport_size) == 88);
+static_assert(offsetof(PushConstants, emissive_factor) == 96);
+static_assert(offsetof(PushConstants, intensity) == 108);
+static_assert(offsetof(PushConstants, exposure) == 112);
+static_assert(sizeof(PushConstants) <= 128);
 
-    auto content = read_text_file(full_path);
-    if (!content.is_ok) {
-        FATAL((std::string("Unable to read shader: \"") + full_path + '"').c_str());
+static std::string module_name_from_file(const std::string& file) {
+    std::string name = file;
+    const auto slash = name.find_last_of("/\\");
+    if(slash != std::string::npos) {
+        name = name.substr(slash + 1);
     }
+    const auto dot = name.rfind('.');
+    if(dot != std::string::npos) {
+        name = name.substr(0, dot);
+    }
+    return name;
+}
 
-    bool define_added = false;
-    auto add_defines = [&]() {
-        if(define_added || defines.is_empty()) {
-            return std::string();
-        }
-        define_added = true;
-        std::string defs = "\n";
-        for(const std::string& def : defines) {
-            defs += "#define " + def + " 1\n";
-        }
-        return defs;
+static int uniform_offset(u32 hash) {
+    switch(hash) {
+        case str_hash("model"): return int(offsetof(PushConstants, model));
+        case str_hash("base_color_factor"): return int(offsetof(PushConstants, base_color_factor));
+        case str_hash("alpha_cutoff"): return int(offsetof(PushConstants, alpha_cutoff));
+        case str_hash("metal_rough_factor"): return int(offsetof(PushConstants, metal_rough_factor));
+        case str_hash("viewport_size"): return int(offsetof(PushConstants, viewport_size));
+        case str_hash("emissive_factor"): return int(offsetof(PushConstants, emissive_factor));
+        case str_hash("intensity"): return int(offsetof(PushConstants, intensity));
+        case str_hash("exposure"): return int(offsetof(PushConstants, exposure));
+        default: return -1;
+    }
+}
+
+static bool file_exists(const std::string& path) {
+    if(FILE* file = std::fopen(path.c_str(), "rb")) {
+        std::fclose(file);
+        return true;
+    }
+    return false;
+}
+
+static std::string spirv_path(const std::string& file, Span<const std::string> defines) {
+    const std::string name = module_name_from_file(file);
+    std::string with_defs = name;
+    for(const std::string& def : defines) {
+        with_defs += "_" + def;
+    }
+    const std::string preferred = std::string(shader_path) + with_defs + ".spv";
+    if(file_exists(preferred)) {
+        return preferred;
+    }
+    return std::string(shader_path) + name + ".spv";
+}
+
+static std::vector<u32> load_spirv(const std::string& path) {
+    FILE* file = std::fopen(path.c_str(), "rb");
+    ALWAYS_ASSERT(file, ("Unable to read SPIR-V: \"" + path + '"').c_str());
+    DEFER(std::fclose(file));
+
+    std::fseek(file, 0, SEEK_END);
+    const long size = std::ftell(file);
+    ALWAYS_ASSERT(size > 0 && size % long(sizeof(u32)) == 0, "Invalid SPIR-V");
+    std::rewind(file);
+
+    std::vector<u32> words(size / long(sizeof(u32)));
+    ALWAYS_ASSERT(std::fread(words.data(), 1, size, file) == size_t(size), "Unable to read SPIR-V");
+    return words;
+}
+
+static VkShaderModule create_shader_module(const std::vector<u32>& spirv) {
+    const VkShaderModuleCreateInfo ci{
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = spirv.size() * sizeof(u32),
+        .pCode = spirv.data(),
+    };
+    VkShaderModule module = VK_NULL_HANDLE;
+    vk_check(vkCreateShaderModule(vk_device(), &ci, nullptr, &module));
+    return module;
+}
+
+static u32 current_pipeline_key() {
+    return u32(ctx().alpha_blend)
+         | (u32(ctx().has_vertex_input) << 1)
+         | (u32(ctx().rendering_color_format) << 4)
+         | (u32(ctx().rendering_depth_format) << 16);
+}
+
+static VkPipeline create_graphics_pipeline(VkShaderModule vert, VkShaderModule frag, bool alpha_blend, bool vertex_input) {
+    const VkPipelineShaderStageCreateInfo stages[] = {
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_VERTEX_BIT,
+            .module = vert,
+            .pName = "vertex_main",
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .module = frag,
+            .pName = "fragment_main",
+        },
     };
 
-    std::string shader(std::move(content.value));
-    std::unordered_set<std::string> includes;
-    for(size_t i = 0; i < shader.size();) {
-        const auto endl = shader.find('\n', i);
-        if(endl == std::string::npos) {
-            break;
+    VkVertexInputBindingDescription binding{
+        .binding = 0,
+        .stride = u32(sizeof(Vertex)),
+        .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+    };
+    const VkVertexInputAttributeDescription attrs[] = {
+        {0, 0, VK_FORMAT_R32G32B32_SFLOAT, u32(offsetof(Vertex, position))},
+        {1, 0, VK_FORMAT_R32G32B32_SFLOAT, u32(offsetof(Vertex, normal))},
+        {2, 0, VK_FORMAT_R32G32_SFLOAT, u32(offsetof(Vertex, uv))},
+        {3, 0, VK_FORMAT_R32G32B32A32_SFLOAT, u32(offsetof(Vertex, tangent_bitangent_sign))},
+        {4, 0, VK_FORMAT_R32G32B32_SFLOAT, u32(offsetof(Vertex, color))},
+    };
+
+    VkPipelineVertexInputStateCreateInfo vertex_input_state{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+    };
+    if(vertex_input) {
+        vertex_input_state.vertexBindingDescriptionCount = 1;
+        vertex_input_state.pVertexBindingDescriptions = &binding;
+        vertex_input_state.vertexAttributeDescriptionCount = 5;
+        vertex_input_state.pVertexAttributeDescriptions = attrs;
+    }
+
+    const VkPipelineInputAssemblyStateCreateInfo input_assembly{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+    };
+
+    const VkPipelineViewportStateCreateInfo viewport{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .viewportCount = 1,
+        .scissorCount = 1,
+    };
+
+    const VkPipelineRasterizationStateCreateInfo raster{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        .polygonMode = VK_POLYGON_MODE_FILL,
+        .cullMode = VK_CULL_MODE_BACK_BIT,
+        .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+        .lineWidth = 1.0f,
+    };
+
+    const VkPipelineMultisampleStateCreateInfo multisample{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+    };
+
+    const VkPipelineDepthStencilStateCreateInfo depth{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .depthTestEnable = VK_TRUE,
+        .depthWriteEnable = VK_TRUE,
+        .depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL,
+    };
+
+    VkPipelineColorBlendAttachmentState blend_attachment{
+        .blendEnable = alpha_blend ? VK_TRUE : VK_FALSE,
+        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        .colorBlendOp = VK_BLEND_OP_ADD,
+        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        .alphaBlendOp = VK_BLEND_OP_ADD,
+        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
+                        | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+    };
+    const VkPipelineColorBlendStateCreateInfo color_blend{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        .attachmentCount = 1,
+        .pAttachments = &blend_attachment,
+    };
+
+    const VkDynamicState dynamic_states[] = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR,
+        VK_DYNAMIC_STATE_CULL_MODE,
+        VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE,
+        VK_DYNAMIC_STATE_DEPTH_COMPARE_OP,
+    };
+    const VkPipelineDynamicStateCreateInfo dynamic{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+        .dynamicStateCount = 5,
+        .pDynamicStates = dynamic_states,
+    };
+
+    const VkPipelineRenderingCreateInfo rendering{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .colorAttachmentCount = 1,
+        .pColorAttachmentFormats = &ctx().rendering_color_format,
+        .depthAttachmentFormat = ctx().rendering_depth_format,
+    };
+
+    const VkGraphicsPipelineCreateInfo pipeline_ci{
+        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .pNext = &rendering,
+        .stageCount = 2,
+        .pStages = stages,
+        .pVertexInputState = &vertex_input_state,
+        .pInputAssemblyState = &input_assembly,
+        .pViewportState = &viewport,
+        .pRasterizationState = &raster,
+        .pMultisampleState = &multisample,
+        .pDepthStencilState = &depth,
+        .pColorBlendState = &color_blend,
+        .pDynamicState = &dynamic,
+        .layout = ctx().pipeline_layout,
+    };
+
+    VkPipeline pipeline = VK_NULL_HANDLE;
+    vk_check(vkCreateGraphicsPipelines(vk_device(), VK_NULL_HANDLE, 1, &pipeline_ci, nullptr, &pipeline));
+    return pipeline;
+}
+
+
+Program::Program(Program&& other) {
+    swap(other);
+}
+
+Program& Program::operator=(Program&& other) {
+    swap(other);
+    return *this;
+}
+
+void Program::swap(Program& other) {
+    std::swap(_vert_module, other._vert_module);
+    std::swap(_frag_module, other._frag_module);
+    std::swap(_comp_module, other._comp_module);
+    std::swap(_compute_pipeline, other._compute_pipeline);
+    std::swap(_pipelines, other._pipelines);
+    std::swap(_push, other._push);
+    std::swap(_is_compute, other._is_compute);
+}
+
+Program::Program(const std::string& frag, const std::string& vert, Span<const std::string> defines) {
+    load_graphics(frag, vert, defines);
+}
+
+Program::Program(const std::string& comp, Span<const std::string> defines) : _is_compute(true) {
+    load_compute(comp, defines);
+}
+
+void Program::load_graphics(const std::string& frag, const std::string& vert, Span<const std::string> defines) {
+    _vert_module = create_shader_module(load_spirv(spirv_path(vert, defines)));
+    _frag_module = create_shader_module(load_spirv(spirv_path(frag, defines)));
+}
+
+void Program::load_compute(const std::string& comp, Span<const std::string> defines) {
+    _comp_module = create_shader_module(load_spirv(spirv_path(comp, defines)));
+
+    const VkComputePipelineCreateInfo pipeline_ci{
+        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .stage = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+            .module = _comp_module,
+            .pName = "compute_main",
+        },
+        .layout = ctx().pipeline_layout,
+    };
+    vk_check(vkCreateComputePipelines(vk_device(), VK_NULL_HANDLE, 1, &pipeline_ci, nullptr, &_compute_pipeline));
+}
+
+void Program::destroy() {
+    if(!vk_device()) {
+        return;
+    }
+    for(CachedPipeline& cached : _pipelines) {
+        if(cached.pipeline) {
+            vkDestroyPipeline(vk_device(), cached.pipeline, nullptr);
         }
-
-        const std::string_view full_line = std::string_view(shader).substr(i, endl - i);
-        std::string_view line = full_line;
-        auto trim = [&] {
-            while(!line.empty() && std::isspace(line.front())) {
-                line = line.substr(1);
-            }
-        };
-
-        trim();
-        if(!line.empty() && line.front() == '#') {
-            line = line.substr(1);
-            trim();
-            if(line.substr(0, 7) == "version") {
-                shader = shader.substr(0, endl) + add_defines() + shader.substr(endl);
-            } else if(line.substr(0, 7) == "include") {
-                line = line.substr(7);
-                trim();
-                if(!line.empty()) {
-                    const char delim = line.front();
-                    // TODO: parse <>
-                    const auto end = line.find(delim, 1);
-                    if(end != line.size() - 1 || delim != '"') {
-                        FATAL((std::string("Unable to parse shader include: \"") + std::string(full_line) + '"').c_str());
-                    }
-
-                    const std::string include_file(line.substr(1, end - 1));
-                    std::string include_content = add_defines();
-                    if(includes.find(include_file) == includes.end()) {
-                        includes.insert(include_file);
-                        auto content = read_text_file(std::string(shader_path) + include_file);
-                        if(!content.is_ok) {
-                            FATAL((std::string("Shader include not found: \"") + std::string(full_line) + '"').c_str());
-                        }
-                        include_content = std::move(content.value);
-                    }
-
-                    shader = shader.substr(0, i) + include_content + shader.substr(endl);
-                    continue;
-                }
-            }
-        }
-
-        i = endl + 1;
     }
-
-    return shader;
-}
-
-static GLuint create_shader(const std::string& src, GLenum type) {
-    const GLuint handle = glCreateShader(type);
-
-    const int len = int(src.size());
-    const char* c_str = src.c_str();
-
-    glShaderSource(handle, 1, &c_str, &len);
-    glCompileShader(handle);
-
-    int res = 0;
-    glGetShaderiv(handle, GL_COMPILE_STATUS, &res);
-    if(!res) {
-        int len = 0;
-        char log[1024] = {};
-        glGetShaderInfoLog(handle, sizeof(log), &len, log);
-        FATAL(log);
+    _pipelines.clear();
+    if(_compute_pipeline) {
+        vkDestroyPipeline(vk_device(), _compute_pipeline, nullptr);
+        _compute_pipeline = VK_NULL_HANDLE;
     }
-
-    return handle;
-}
-
-static void link_program(GLuint handle) {
-    glLinkProgram(handle);
-
-    int res = 0;
-    glGetProgramiv(handle, GL_LINK_STATUS, &res);
-    if(!res) {
-        int len = 0;
-        char log[1024] = {};
-        glGetProgramInfoLog(handle, sizeof(log), &len, log);
-        FATAL(log);
+    if(_vert_module) {
+        vkDestroyShaderModule(vk_device(), _vert_module, nullptr);
+        _vert_module = VK_NULL_HANDLE;
     }
-}
-
-
-
-Program::Program(const std::string& frag, const std::string& vert) : _handle(glCreateProgram()) {
-    const GLuint vert_handle = create_shader(vert, GL_VERTEX_SHADER);
-    const GLuint frag_handle = create_shader(frag, GL_FRAGMENT_SHADER);
-
-    glAttachShader(_handle.get(), vert_handle);
-    glAttachShader(_handle.get(), frag_handle);
-
-    link_program(_handle.get());
-
-    glDeleteShader(vert_handle);
-    glDeleteShader(frag_handle);
-
-    fetch_uniform_locations();
-}
-
-Program::Program(const std::string& comp) : _handle(glCreateProgram()), _is_compute(true) {
-    const GLuint comp_handle = create_shader(comp, GL_COMPUTE_SHADER);
-
-    glAttachShader(_handle.get(), comp_handle);
-
-    link_program(_handle.get());
-
-    glDeleteShader(comp_handle);
-
-    fetch_uniform_locations();
-}
-
-void Program::fetch_uniform_locations() {
-    int uniform_count = 0;
-    glGetProgramiv(_handle.get(), GL_ACTIVE_UNIFORMS, &uniform_count);
-
-    for(int i = 0; i != uniform_count; ++i) {
-        char name[1024] = {};
-        int len = 0;
-        int discard = 0;
-        GLenum type = GL_NONE;
-
-        glGetActiveUniform(_handle.get(), i, sizeof(name), &len, &discard, &type, name);
-
-        _uniform_locations.emplace_back(UniformLocationInfo{str_hash(name), glGetUniformLocation(_handle.get(), name)});
+    if(_frag_module) {
+        vkDestroyShaderModule(vk_device(), _frag_module, nullptr);
+        _frag_module = VK_NULL_HANDLE;
     }
-
-    std::sort(_uniform_locations.begin(), _uniform_locations.end());
-    ALWAYS_ASSERT(std::unique(_uniform_locations.begin(), _uniform_locations.end()) == _uniform_locations.end(), "Duplicated uniform hash");
-
+    if(_comp_module) {
+        vkDestroyShaderModule(vk_device(), _comp_module, nullptr);
+        _comp_module = VK_NULL_HANDLE;
+    }
 }
 
 Program::~Program() {
-    if(_handle.is_valid()) {
-        glDeleteProgram(_handle.get());
+    destroy();
+}
+
+VkPipeline Program::get_or_create_pipeline() const {
+    const u32 key = current_pipeline_key();
+    for(const CachedPipeline& cached : _pipelines) {
+        if(cached.key == key) {
+            return cached.pipeline;
+        }
     }
+
+    const VkPipeline pipeline = create_graphics_pipeline(
+        _vert_module,
+        _frag_module,
+        ctx().alpha_blend,
+        ctx().has_vertex_input
+    );
+    _pipelines.push_back({key, pipeline});
+    return pipeline;
 }
 
 void Program::bind() const {
-    glUseProgram(_handle.get());
+    ctx().bound_program = this;
+
+    if(!ctx().frame_active) {
+        return;
+    }
+
+    const VkCommandBuffer cmd = vk_command_buffer();
+    if(_is_compute) {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute_pipeline);
+    } else {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, get_or_create_pipeline());
+        vkCmdSetCullMode(cmd, VK_CULL_MODE_BACK_BIT);
+        vkCmdSetDepthTestEnable(cmd, VK_TRUE);
+        vkCmdSetDepthCompareOp(cmd, VK_COMPARE_OP_GREATER_OR_EQUAL);
+    }
+
+    flush_push_constants();
+}
+
+void Program::flush_push_constants() const {
+    if(!ctx().frame_active || !ctx().pipeline_layout) {
+        return;
+    }
+    vkCmdPushConstants(
+        vk_command_buffer(),
+        ctx().pipeline_layout,
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
+        0,
+        sizeof(_push),
+        &_push
+    );
 }
 
 bool Program::is_compute() const {
@@ -191,7 +376,7 @@ std::shared_ptr<Program> Program::from_file(const std::string& comp, Span<const 
     auto& weak_program = loaded[key];
     auto program = weak_program.lock();
     if(!program) {
-        program = std::make_shared<Program>(read_shader(comp, defines));
+        program = std::make_shared<Program>(comp, defines);
         weak_program = program;
     }
     return program;
@@ -207,79 +392,19 @@ std::shared_ptr<Program> Program::from_files(const std::string& frag, const std:
     auto& weak_program = loaded[key];
     auto program = weak_program.lock();
     if(!program) {
-        program = std::make_shared<Program>(read_shader(frag, defines), read_shader(vert, defines));
+        program = std::make_shared<Program>(frag, vert, defines);
         weak_program = program;
     }
     return program;
 }
 
-int Program::find_location(u32 hash) {
-    const auto it = std::lower_bound(_uniform_locations.begin(), _uniform_locations.end(), UniformLocationInfo{hash, 0});
-    return (it == _uniform_locations.end() || it->name_hash != hash) ? -1 : it->location;
-}
-
-
-
-void Program::set_uniform(u32 name_hash, u32 value) {
-    if(const int loc = find_location(name_hash); loc >= 0) {
-        glProgramUniform1ui(_handle.get(), loc, value);
+void Program::write_uniform(u32 name_hash, const void* data, u32 size) {
+    const int off = uniform_offset(name_hash);
+    if(off < 0) {
+        return;
     }
-}
-
-void Program::set_uniform(u32 name_hash, float value) {
-    if(const int loc = find_location(name_hash); loc >= 0) {
-        glProgramUniform1f(_handle.get(), loc, value);
-    }
-}
-
-void Program::set_uniform(u32 name_hash, glm::vec2 value) {
-    if(const int loc = find_location(name_hash); loc >= 0) {
-        glProgramUniform2f(_handle.get(), loc, value.x, value.y);
-    }
-}
-
-void Program::set_uniform(u32 name_hash, glm::vec3 value) {
-    if(const int loc = find_location(name_hash); loc >= 0) {
-        glProgramUniform3f(_handle.get(), loc, value.x, value.y, value.z);
-    }
-}
-
-void Program::set_uniform(u32 name_hash, glm::vec4 value) {
-    if(const int loc = find_location(name_hash); loc >= 0) {
-        glProgramUniform4f(_handle.get(), loc, value.x, value.y, value.z, value.w);
-    }
-}
-
-void Program::set_uniform(u32 name_hash, const glm::mat2& value) {
-    if(const int loc = find_location(name_hash); loc >= 0) {
-        glProgramUniformMatrix2fv(_handle.get(), loc, 1, false, reinterpret_cast<const float*>(&value));
-    }
-}
-
-void Program::set_uniform(u32 name_hash, const glm::mat3& value) {
-    if(const int loc = find_location(name_hash); loc >= 0) {
-        glProgramUniformMatrix3fv(_handle.get(), loc, 1, false, reinterpret_cast<const float*>(&value));
-    }
-}
-
-void Program::set_uniform(u32 name_hash, const glm::mat4& value) {
-    if(const int loc = find_location(name_hash); loc >= 0) {
-        glProgramUniformMatrix4fv(_handle.get(), loc, 1, false, reinterpret_cast<const float*>(&value));
-    }
-}
-
-void Program::set_uniform(u32 name_hash, u64 value) {
-    DEBUG_ASSERT(bindless_enabled());
-    DEBUG_ASSERT(glProgramUniformHandleui64ARB);
-    if(const int loc = find_location(name_hash); loc >= 0) {
-        glProgramUniformHandleui64ARB(_handle.get(), loc, value);
-    }
-}
-
-void Program::set_uniform(u32 name_hash, const UniformValue& value) {
-    std::visit([name_hash, this](const auto& v) {
-        set_uniform(name_hash, v);
-    }, value);
+    DEBUG_ASSERT(u32(off) + size <= sizeof(_push));
+    std::memcpy(reinterpret_cast<u8*>(&_push) + off, data, size);
 }
 
 }

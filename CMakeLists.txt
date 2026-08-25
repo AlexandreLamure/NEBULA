@@ -23,10 +23,14 @@ endif()
 if(Vulkan_VERSION VERSION_LESS "1.3.0")
     message(FATAL_ERROR "Vulkan SDK is too old. OM3D requires 1.3 or newer")
 endif()
+
 # slangc executable
 if(NOT Vulkan_SLANGC_EXECUTABLE)
     set(Vulkan_SLANGC_EXECUTABLE ${Vulkan_GLSLC_EXECUTABLE})
     cmake_path(REPLACE_FILENAME Vulkan_SLANGC_EXECUTABLE "slangc")
+endif()
+if(NOT Vulkan_SLANGC_EXECUTABLE)
+    message(FATAL_ERROR "slangc not found. Install Slang or the Vulkan SDK, or set SLANG_ROOT.")
 endif()
 
 ## glfw for window handling
@@ -63,9 +67,62 @@ file(GLOB_RECURSE EXTERNAL_FILES
 file(GLOB_RECURSE SHADER_FILES
     "shaders/*.slang"
 )
+set_source_files_properties(${SHADER_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 
 
 
 add_executable(OM3D ${SOURCE_FILES} ${EXTERNAL_FILES} ${SHADER_FILES})
 target_link_libraries(OM3D glfw)
 target_compile_options(OM3D PUBLIC ${COMPILE_OPTIONS})
+
+
+# SPIR-V is written next to the executable. Run OM3D from the build directory.
+set(SHADER_SOURCE_DIR ${CMAKE_SOURCE_DIR}/shaders)
+set(SPIRV_FILES)
+
+macro(add_slang_shader SHADER_FILE)
+    get_filename_component(SHADER_NAME ${SHADER_FILE} NAME_WE)
+    set(COMPILE_ARGS)
+    set(NAME_SUFFIX)
+    foreach(DEF ${ARGN})
+        list(APPEND COMPILE_ARGS -D${DEF}=1)
+        set(NAME_SUFFIX "${NAME_SUFFIX}_${DEF}")
+    endforeach()
+
+    set(SHADER_BIN ${CMAKE_CURRENT_BINARY_DIR}/${SHADER_NAME}${NAME_SUFFIX}.spv)
+    add_custom_command(
+        OUTPUT ${SHADER_BIN}
+        COMMAND ${Vulkan_SLANGC_EXECUTABLE}
+            ${COMPILE_ARGS}
+            -target spirv
+            -profile spirv_1_3
+            -matrix-layout-column-major
+            -fvk-use-entrypoint-name
+            -emit-spirv-directly
+            -I ${SHADER_SOURCE_DIR}
+            -o ${SHADER_BIN}
+            ${SHADER_SOURCE_DIR}/${SHADER_FILE}
+        DEPENDS
+            ${SHADER_SOURCE_DIR}/${SHADER_FILE}
+            ${SHADER_SOURCE_DIR}/structs.slang
+            ${SHADER_SOURCE_DIR}/utils.slang
+            ${SHADER_SOURCE_DIR}/lighting.slang
+        COMMENT "slangc ${SHADER_FILE} ${ARGN}"
+        VERBATIM
+    )
+    list(APPEND SPIRV_FILES ${SHADER_BIN})
+endmacro()
+
+add_slang_shader(basic.slang)
+add_slang_shader(lit.slang)
+add_slang_shader(lit.slang ALPHA_TEST)
+add_slang_shader(screen.slang)
+add_slang_shader(sky.slang)
+add_slang_shader(tonemap.slang)
+add_slang_shader(passthrough.slang)
+add_slang_shader(imgui.slang)
+add_slang_shader(brdf.slang)
+add_slang_shader(equirec_cube.slang)
+
+add_custom_target(shaders DEPENDS ${SPIRV_FILES})
+add_dependencies(OM3D shaders)

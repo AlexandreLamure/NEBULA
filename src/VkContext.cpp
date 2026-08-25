@@ -4,6 +4,8 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
+#include "Program.h"
+
 #include <algorithm>
 #include <cstring>
 #include <iostream>
@@ -229,6 +231,7 @@ static void create_swapchain() {
 
     g_ctx.swapchain_format = surface_format.format;
     g_ctx.swapchain_extent = extent;
+    g_ctx.rendering_color_format = surface_format.format;
 
     u32 actual_count = 0;
     vk_check(vkGetSwapchainImagesKHR(g_ctx.device, g_ctx.swapchain, &actual_count, nullptr));
@@ -294,6 +297,48 @@ static void create_frames() {
         vk_check(vkCreateSemaphore(g_ctx.device, &sem_ci, nullptr, &frame.acquire));
         vk_check(vkCreateSemaphore(g_ctx.device, &sem_ci, nullptr, &frame.render));
     }
+}
+
+static void create_pipeline_layout() {
+    // One set for the whole engine. Bindings match the Slang [[vk::binding(n)]] slots.
+    // Chapter 9 will allocate descriptor sets from this layout at draw time.
+    //   0: frame UBO
+    //   1: point-light SSBO
+    //   2-5: material textures (GL slots 0-3)
+    //   6: env cubemap (GL slot 4)
+    //   7: BRDF LUT (GL slot 5)
+    //   8: storage image (compute)
+    const VkDescriptorSetLayoutBinding bindings[] = {
+        {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr},
+        {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr},
+        {2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
+        {3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
+        {4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
+        {5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
+        {6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
+        {7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
+        {8, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_ALL, nullptr},
+    };
+    const VkDescriptorSetLayoutCreateInfo set_ci{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 9,
+        .pBindings = bindings,
+    };
+    vk_check(vkCreateDescriptorSetLayout(g_ctx.device, &set_ci, nullptr, &g_ctx.descriptor_set_layout));
+
+    const VkPushConstantRange push{
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
+        .offset = 0,
+        .size = sizeof(PushConstants),
+    };
+    const VkPipelineLayoutCreateInfo layout_ci{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = &g_ctx.descriptor_set_layout,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &push,
+    };
+    vk_check(vkCreatePipelineLayout(g_ctx.device, &layout_ci, nullptr, &g_ctx.pipeline_layout));
 }
 
 static void image_barrier(
@@ -525,6 +570,7 @@ void vk_init(GLFWwindow* window) {
 
     create_swapchain();
     create_frames();
+    create_pipeline_layout();
 }
 
 void begin_frame() {
@@ -542,6 +588,7 @@ void begin_frame() {
     }
 
     InFlightFrame& frame = g_ctx.frames[g_ctx.frame_index];
+    g_ctx.bound_program = nullptr;
     vk_check(vkWaitForFences(g_ctx.device, 1, &frame.submitted, VK_TRUE, UINT64_MAX));
     // Chapter 7 will flush the deletion queue for this frame slot here.
     vk_check(vkResetFences(g_ctx.device, 1, &frame.submitted));
@@ -637,6 +684,14 @@ void vk_destroy() {
     }
     destroy_frames();
     destroy_swapchain();
+    if(g_ctx.pipeline_layout) {
+        vkDestroyPipelineLayout(g_ctx.device, g_ctx.pipeline_layout, nullptr);
+        g_ctx.pipeline_layout = VK_NULL_HANDLE;
+    }
+    if(g_ctx.descriptor_set_layout) {
+        vkDestroyDescriptorSetLayout(g_ctx.device, g_ctx.descriptor_set_layout, nullptr);
+        g_ctx.descriptor_set_layout = VK_NULL_HANDLE;
+    }
     if(g_ctx.allocator) {
         vmaDestroyAllocator(g_ctx.allocator);
         g_ctx.allocator = VK_NULL_HANDLE;

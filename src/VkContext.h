@@ -16,6 +16,8 @@ struct GLFWwindow;
 
 namespace OM3D {
 
+class Program;
+
 static constexpr u32 frames_in_flight = 2;
 
 struct InFlightFrame {
@@ -43,6 +45,15 @@ struct GraphicsContext {
     VmaAllocator allocator = VK_NULL_HANDLE;
 
     std::string device_name;
+
+    VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
+    VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
+
+    const Program* bound_program = nullptr;
+    bool alpha_blend = false;
+    bool has_vertex_input = true;
+    VkFormat rendering_color_format = VK_FORMAT_B8G8R8A8_SRGB;
+    VkFormat rendering_depth_format = VK_FORMAT_UNDEFINED;
 
     VkSwapchainKHR swapchain = VK_NULL_HANDLE;
     VkFormat swapchain_format = VK_FORMAT_B8G8R8A8_SRGB;

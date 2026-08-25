@@ -1,5 +1,8 @@
 #include "StaticMesh.h"
 
+#include "VkContext.h"
+#include "Program.h"
+
 #include <volk.h>
 
 namespace OM3D {
@@ -12,6 +15,12 @@ StaticMesh::StaticMesh(const MeshData& data) :
 }
 
 void StaticMesh::draw() const {
+    ctx().has_vertex_input = true;
+    if(ctx().bound_program) {
+        ctx().bound_program->bind();
+        ctx().bound_program->flush_push_constants();
+    }
+
     _vertex_buffer.bind(BufferUsage::Attribute);
     _index_buffer.bind(BufferUsage::Index);
 

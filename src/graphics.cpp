@@ -3,6 +3,7 @@
 
 #include "Texture.h"
 #include "TimestampQuery.h"
+#include "Program.h"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -79,10 +80,6 @@ u32 align_up_to(u32 val, u32 up_to) {
 }
 
 
-
-bool bindless_enabled() {
-    return GLAD_GL_ARB_bindless_texture != 0;
-}
 
 void init_graphics(GLFWwindow* window) {
     vk_init(window);
@@ -176,6 +173,12 @@ const Texture& brdf_lut() {
 void draw_full_screen_triangle() {
     if(audit_bindings_before_draw) {
         audit_bindings();
+    }
+
+    ctx().has_vertex_input = false;
+    if(ctx().bound_program) {
+        ctx().bound_program->bind();
+        ctx().bound_program->flush_push_constants();
     }
 
     glDisableVertexAttribArray(0);

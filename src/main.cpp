@@ -247,10 +247,6 @@ void gui(ImGuiRenderer& imgui) {
         ImGui::TextColored(warning_text_color, ICON_FA_BUG " (DEBUG)");
 #endif
 
-        if(!bindless_enabled()) {
-            ImGui::Separator();
-            ImGui::TextColored(error_text_color, ICON_FA_EXCLAMATION_TRIANGLE " Bindless textures not supported");
-        }
         ImGui::EndMainMenuBar();
     }
 

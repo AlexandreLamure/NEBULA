@@ -1,6 +1,6 @@
 #include "Material.h"
 
-#include <volk.h>
+#include "VkContext.h"
 
 #include <algorithm>
 
@@ -48,6 +48,8 @@ void Material::set_stored_uniform(u32 name_hash, UniformValue value) {
 }
 
 void Material::bind() const {
+    ctx().alpha_blend = (_blend_mode == BlendMode::Alpha);
+
     switch(_blend_mode) {
         case BlendMode::None:
             glDisable(GL_BLEND);
