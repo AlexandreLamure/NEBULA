@@ -61,9 +61,14 @@ class Program : NonCopyable {
         static std::shared_ptr<Program> from_file(const std::string& comp, Span<const std::string> defines = {});
         static std::shared_ptr<Program> from_files(const std::string& frag, const std::string& vert, Span<const std::string> defines = {});
 
+        void set_uniform(u32 name_hash, const UniformValue& value) {
+            std::visit([&](const auto& v) {
+                write_uniform(name_hash, &v, sizeof(v));
+            }, value);
+        }
         template<typename T>
-        void set_uniform(std::string_view name, const T& value) {
-            write_uniform(str_hash(name), &value, sizeof(value));
+        void set_uniform(u32 name_hash, const T& value) {
+            write_uniform(name_hash, &value, sizeof(value));
         }
 
     private:

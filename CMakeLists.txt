@@ -30,7 +30,7 @@ if(NOT Vulkan_SLANGC_EXECUTABLE)
     cmake_path(REPLACE_FILENAME Vulkan_SLANGC_EXECUTABLE "slangc")
 endif()
 if(NOT Vulkan_SLANGC_EXECUTABLE)
-    message(FATAL_ERROR "slangc not found. Install Slang or the Vulkan SDK, or set SLANG_ROOT.")
+    message(FATAL_ERROR "slangc not found. Install Slang or the Vulkan SDK.")
 endif()
 
 ## glfw for window handling
