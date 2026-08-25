@@ -280,31 +280,27 @@ void Program::load_compute(const std::string& comp, Span<const std::string> defi
 }
 
 void Program::destroy() {
+    if(ctx().bound_program == this) {
+        ctx().bound_program = nullptr;
+    }
     if(!vk_device()) {
         return;
     }
+
+    // Enqueue in creation order so reverse flush destroys pipelines before modules.
+    defer_destroy(_vert_module);
+    defer_destroy(_frag_module);
+    defer_destroy(_comp_module);
+    defer_destroy(_compute_pipeline);
     for(CachedPipeline& cached : _pipelines) {
-        if(cached.pipeline) {
-            vkDestroyPipeline(vk_device(), cached.pipeline, nullptr);
-        }
+        defer_destroy(cached.pipeline);
     }
+
+    _vert_module = VK_NULL_HANDLE;
+    _frag_module = VK_NULL_HANDLE;
+    _comp_module = VK_NULL_HANDLE;
+    _compute_pipeline = VK_NULL_HANDLE;
     _pipelines.clear();
-    if(_compute_pipeline) {
-        vkDestroyPipeline(vk_device(), _compute_pipeline, nullptr);
-        _compute_pipeline = VK_NULL_HANDLE;
-    }
-    if(_vert_module) {
-        vkDestroyShaderModule(vk_device(), _vert_module, nullptr);
-        _vert_module = VK_NULL_HANDLE;
-    }
-    if(_frag_module) {
-        vkDestroyShaderModule(vk_device(), _frag_module, nullptr);
-        _frag_module = VK_NULL_HANDLE;
-    }
-    if(_comp_module) {
-        vkDestroyShaderModule(vk_device(), _comp_module, nullptr);
-        _comp_module = VK_NULL_HANDLE;
-    }
 }
 
 Program::~Program() {

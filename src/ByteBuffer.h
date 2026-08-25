@@ -3,6 +3,7 @@
 
 #include <graphics.h>
 #include <BufferMapping.h>
+#include <VkContext.h>
 
 namespace OM3D {
 
@@ -10,8 +11,8 @@ class ByteBuffer : NonCopyable {
 
     public:
         ByteBuffer() = default;
-        ByteBuffer(ByteBuffer&&) = default;
-        ByteBuffer& operator=(ByteBuffer&&) = default;
+        ByteBuffer(ByteBuffer&& other);
+        ByteBuffer& operator=(ByteBuffer&& other);
 
         ByteBuffer(const void* data, size_t size);
         ~ByteBuffer();
@@ -25,11 +26,17 @@ class ByteBuffer : NonCopyable {
 
     protected:
         void* map_internal(AccessType access);
-        const GLHandle& handle() const;
+        VmaAllocation allocation() const;
+        bool mapping_needs_flush() const;
 
     private:
-        GLHandle _handle;
+        void swap(ByteBuffer& other);
+
+        VkBuffer _buffer = VK_NULL_HANDLE;
+        VmaAllocation _allocation = nullptr;
+        void* _mapped = nullptr;
         size_t _size = 0;
+        bool _needs_flush = false;
 };
 
 }

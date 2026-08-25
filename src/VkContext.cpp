@@ -321,7 +321,7 @@ static void create_pipeline_layout() {
     };
     const VkDescriptorSetLayoutCreateInfo set_ci{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 9,
+        .bindingCount = descriptor_binding_count,
         .pBindings = bindings,
     };
     vk_check(vkCreateDescriptorSetLayout(g_ctx.device, &set_ci, nullptr, &g_ctx.descriptor_set_layout));
@@ -339,6 +339,172 @@ static void create_pipeline_layout() {
         .pPushConstantRanges = &push,
     };
     vk_check(vkCreatePipelineLayout(g_ctx.device, &layout_ci, nullptr, &g_ctx.pipeline_layout));
+}
+
+static void create_immediate_pool() {
+    const VkCommandPoolCreateInfo pool_ci{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+        .queueFamilyIndex = g_ctx.graphics_queue_family,
+    };
+    vk_check(vkCreateCommandPool(g_ctx.device, &pool_ci, nullptr, &g_ctx.immediate_pool));
+}
+
+static u32 pending_deletion_slot() {
+    // During a frame, objects may still be referenced by this slot's command buffer.
+    // Between frames, the last submitted slot is the one that may still be on the GPU.
+    if(g_ctx.frame_active) {
+        return g_ctx.frame_index;
+    }
+    return (g_ctx.frame_index + frames_in_flight - 1) % frames_in_flight;
+}
+
+static void destroy_entry(const DeletionEntry& entry) {
+    switch(entry.type) {
+        case DeletionEntry::Type::Buffer:
+            vmaDestroyBuffer(g_ctx.allocator, entry.buffer, entry.allocation);
+            break;
+        case DeletionEntry::Type::Image:
+            vmaDestroyImage(g_ctx.allocator, entry.image, entry.allocation);
+            break;
+        case DeletionEntry::Type::ImageView:
+            vkDestroyImageView(g_ctx.device, entry.image_view, nullptr);
+            break;
+        case DeletionEntry::Type::Sampler:
+            vkDestroySampler(g_ctx.device, entry.sampler, nullptr);
+            break;
+        case DeletionEntry::Type::Pipeline:
+            vkDestroyPipeline(g_ctx.device, entry.pipeline, nullptr);
+            break;
+        case DeletionEntry::Type::ShaderModule:
+            vkDestroyShaderModule(g_ctx.device, entry.shader_module, nullptr);
+            break;
+    }
+}
+
+void flush_frame_deletions(u32 frame_slot) {
+    std::vector<DeletionEntry>& queue = g_ctx.deletions[frame_slot];
+    for(auto it = queue.rbegin(); it != queue.rend(); ++it) {
+        destroy_entry(*it);
+    }
+    queue.clear();
+}
+
+void flush_all_deletions() {
+    for(u32 i = 0; i != frames_in_flight; ++i) {
+        flush_frame_deletions(i);
+    }
+}
+
+static void enqueue_deletion(DeletionEntry entry) {
+    if(!g_ctx.device) {
+        return;
+    }
+    g_ctx.deletions[pending_deletion_slot()].push_back(entry);
+}
+
+void defer_destroy(VkBuffer buffer, VmaAllocation allocation) {
+    if(!buffer) {
+        return;
+    }
+    DeletionEntry entry{};
+    entry.type = DeletionEntry::Type::Buffer;
+    entry.allocation = allocation;
+    entry.buffer = buffer;
+    enqueue_deletion(entry);
+}
+
+void defer_destroy(VkImage image, VmaAllocation allocation) {
+    if(!image) {
+        return;
+    }
+    DeletionEntry entry{};
+    entry.type = DeletionEntry::Type::Image;
+    entry.allocation = allocation;
+    entry.image = image;
+    enqueue_deletion(entry);
+}
+
+void defer_destroy(VkImageView view) {
+    if(!view) {
+        return;
+    }
+    DeletionEntry entry{};
+    entry.type = DeletionEntry::Type::ImageView;
+    entry.image_view = view;
+    enqueue_deletion(entry);
+}
+
+void defer_destroy(VkSampler sampler) {
+    if(!sampler) {
+        return;
+    }
+    DeletionEntry entry{};
+    entry.type = DeletionEntry::Type::Sampler;
+    entry.sampler = sampler;
+    enqueue_deletion(entry);
+}
+
+void defer_destroy(VkPipeline pipeline) {
+    if(!pipeline) {
+        return;
+    }
+    DeletionEntry entry{};
+    entry.type = DeletionEntry::Type::Pipeline;
+    entry.pipeline = pipeline;
+    enqueue_deletion(entry);
+}
+
+void defer_destroy(VkShaderModule module) {
+    if(!module) {
+        return;
+    }
+    DeletionEntry entry{};
+    entry.type = DeletionEntry::Type::ShaderModule;
+    entry.shader_module = module;
+    enqueue_deletion(entry);
+}
+
+void immediate_submit(std::function<void(VkCommandBuffer)>&& record) {
+    ALWAYS_ASSERT(g_ctx.immediate_pool && g_ctx.graphics_queue, "immediate_submit called before vk_init");
+
+    const VkCommandBufferAllocateInfo alloc_ci{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = g_ctx.immediate_pool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    };
+    VkCommandBuffer cmd = VK_NULL_HANDLE;
+    vk_check(vkAllocateCommandBuffers(g_ctx.device, &alloc_ci, &cmd));
+
+    const VkCommandBufferBeginInfo begin_ci{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    vk_check(vkBeginCommandBuffer(cmd, &begin_ci));
+    record(cmd);
+    vk_check(vkEndCommandBuffer(cmd));
+
+    const VkFenceCreateInfo fence_ci{
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+    };
+    VkFence fence = VK_NULL_HANDLE;
+    vk_check(vkCreateFence(g_ctx.device, &fence_ci, nullptr, &fence));
+
+    const VkCommandBufferSubmitInfo cmd_info{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+        .commandBuffer = cmd,
+    };
+    const VkSubmitInfo2 submit{
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+        .commandBufferInfoCount = 1,
+        .pCommandBufferInfos = &cmd_info,
+    };
+    vk_check(vkQueueSubmit2(g_ctx.graphics_queue, 1, &submit, fence));
+    vk_check(vkWaitForFences(g_ctx.device, 1, &fence, VK_TRUE, UINT64_MAX));
+
+    vkDestroyFence(g_ctx.device, fence, nullptr);
+    vkFreeCommandBuffers(g_ctx.device, g_ctx.immediate_pool, 1, &cmd);
 }
 
 static void image_barrier(
@@ -570,6 +736,7 @@ void vk_init(GLFWwindow* window) {
 
     create_swapchain();
     create_frames();
+    create_immediate_pool();
     create_pipeline_layout();
 }
 
@@ -589,8 +756,13 @@ void begin_frame() {
 
     InFlightFrame& frame = g_ctx.frames[g_ctx.frame_index];
     g_ctx.bound_program = nullptr;
+    g_ctx.bound_vertex = {};
+    g_ctx.bound_index = {};
+    for(BoundBuffer& bound : g_ctx.bound_descriptors) {
+        bound = {};
+    }
     vk_check(vkWaitForFences(g_ctx.device, 1, &frame.submitted, VK_TRUE, UINT64_MAX));
-    // Chapter 7 will flush the deletion queue for this frame slot here.
+    flush_frame_deletions(g_ctx.frame_index);
     vk_check(vkResetFences(g_ctx.device, 1, &frame.submitted));
     vk_check(vkResetCommandPool(g_ctx.device, frame.command_pool, 0));
 
@@ -681,9 +853,14 @@ void end_frame() {
 void vk_destroy() {
     if(g_ctx.device) {
         vkDeviceWaitIdle(g_ctx.device);
+        flush_all_deletions();
     }
     destroy_frames();
     destroy_swapchain();
+    if(g_ctx.immediate_pool) {
+        vkDestroyCommandPool(g_ctx.device, g_ctx.immediate_pool, nullptr);
+        g_ctx.immediate_pool = VK_NULL_HANDLE;
+    }
     if(g_ctx.pipeline_layout) {
         vkDestroyPipelineLayout(g_ctx.device, g_ctx.pipeline_layout, nullptr);
         g_ctx.pipeline_layout = VK_NULL_HANDLE;

@@ -24,7 +24,7 @@ class TypedBuffer : public ByteBuffer {
         }
 
         BufferMapping<T> map(AccessType access = AccessType::ReadWrite) {
-            return BufferMapping<T>(ByteBuffer::map_internal(access), byte_size(), handle());
+            return BufferMapping<T>(ByteBuffer::map_internal(access), byte_size(), allocation(), mapping_needs_flush());
         }
 };
 

@@ -1,7 +1,4 @@
-
 #include "BufferMapping.h"
-
-#include <volk.h>
 
 namespace OM3D {
 
@@ -15,16 +12,18 @@ BufferMappingBase& BufferMappingBase::operator=(BufferMappingBase&& other) {
 }
 
 BufferMappingBase::~BufferMappingBase() {
-    if(_handle.is_valid()) {
-        glUnmapNamedBuffer(_handle.get());
+    // Persistent map: do not unmap. Non-coherent memory must be flushed so the
+    // GPU sees the CPU writes at the next submit.
+    if(_needs_flush && _allocation && device_allocator()) {
+        vk_check(vmaFlushAllocation(device_allocator(), _allocation, 0, VK_WHOLE_SIZE));
     }
 }
 
 void BufferMappingBase::swap(BufferMappingBase& other) {
-    std::swap(_handle, other._handle);
+    std::swap(_allocation, other._allocation);
     std::swap(_byte_size, other._byte_size);
     std::swap(_data, other._data);
+    std::swap(_needs_flush, other._needs_flush);
 }
 
 }
-

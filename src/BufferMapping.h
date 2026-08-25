@@ -2,6 +2,7 @@
 #define BUFFERMAPPING_H
 
 #include <graphics.h>
+#include <VkContext.h>
 
 namespace OM3D {
 
@@ -17,9 +18,10 @@ class BufferMappingBase : NonCopyable {
 
         void swap(BufferMappingBase& other);
 
-        GLHandle _handle;
+        VmaAllocation _allocation = nullptr;
         size_t _byte_size = 0;
         void* _data = nullptr;
+        bool _needs_flush = false;
 };
 
 template<typename T>
@@ -48,10 +50,11 @@ class BufferMapping : BufferMappingBase {
         template<typename U>
         friend class TypedBuffer;
 
-        BufferMapping(void* data, size_t size, const GLHandle& handle) {
+        BufferMapping(void* data, size_t size, VmaAllocation allocation, bool needs_flush) {
             _data = data;
             _byte_size = size;
-            _handle = GLHandle(handle.get());
+            _allocation = allocation;
+            _needs_flush = needs_flush;
             ALWAYS_ASSERT(size % sizeof(T) == 0, "Element size doesn't divide buffer size");
         }
 };
