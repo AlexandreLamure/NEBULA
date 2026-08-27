@@ -75,6 +75,7 @@ void ByteBuffer::swap(ByteBuffer& other) {
 ByteBuffer::ByteBuffer(const void* data, size_t size) : _size(size) {
     ALWAYS_ASSERT(_size, "Buffer size can not be 0");
 
+    // TODO: this heuristic is not great. I should build a proper system to declare which are used for which purposes.
     if(data) {
         // Mesh vertex/index: device-local, uploaded once through a staging buffer.
         AllocatedBuffer gpu = create_buffer(

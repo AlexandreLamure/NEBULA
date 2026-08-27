@@ -4,6 +4,8 @@
 #include <graphics.h>
 #include <ImageFormat.h>
 
+#include <volk.h>
+
 #include <glm/vec2.hpp>
 
 #include <vector>
@@ -60,6 +62,11 @@ class Texture {
     private:
         friend class Framebuffer;
         friend class Program;
+
+        // Chapter 10 owns creation; Framebuffer (Chapter 8) only needs view + tracked layout.
+        VkImage _image = VK_NULL_HANDLE;
+        VkImageView _view = VK_NULL_HANDLE;
+        VkImageLayout _layout = VK_IMAGE_LAYOUT_UNDEFINED;
 
         GLHandle _handle;
         glm::uvec2 _size = {};

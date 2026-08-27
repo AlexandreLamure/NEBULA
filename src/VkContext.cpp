@@ -507,7 +507,7 @@ void immediate_submit(std::function<void(VkCommandBuffer)>&& record) {
     vkFreeCommandBuffers(g_ctx.device, g_ctx.immediate_pool, 1, &cmd);
 }
 
-static void image_barrier(
+void image_barrier(
     VkCommandBuffer cmd,
     VkImage image,
     VkImageLayout old_layout,
@@ -515,7 +515,8 @@ static void image_barrier(
     VkPipelineStageFlags2 src_stage,
     VkAccessFlags2 src_access,
     VkPipelineStageFlags2 dst_stage,
-    VkAccessFlags2 dst_access
+    VkAccessFlags2 dst_access,
+    VkImageAspectFlags aspect
 ) {
     const VkImageMemoryBarrier2 barrier{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -527,7 +528,7 @@ static void image_barrier(
         .newLayout = new_layout,
         .image = image,
         .subresourceRange = {
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .aspectMask = aspect,
             .levelCount = 1,
             .layerCount = 1,
         },
@@ -540,78 +541,33 @@ static void image_barrier(
     vkCmdPipelineBarrier2(cmd, &dep);
 }
 
-static void set_swapchain_viewport(VkCommandBuffer cmd) {
-    // Vulkan NDC has Y down. A negative viewport height flips Y so shaders can keep OpenGL-style NDC.
-    const float height = float(g_ctx.swapchain_extent.height);
-    const VkViewport viewport{
-        .x = 0.0f,
-        .y = height,
-        .width = float(g_ctx.swapchain_extent.width),
-        .height = -height,
-        .minDepth = 0.0f,
-        .maxDepth = 1.0f,
-    };
-    const VkRect2D scissor{
-        .extent = g_ctx.swapchain_extent,
-    };
-    vkCmdSetViewport(cmd, 0, 1, &viewport);
-    vkCmdSetScissor(cmd, 0, 1, &scissor);
-}
-
-static void begin_swapchain_rendering() {
-    const VkCommandBuffer cmd = vk_command_buffer();
-    const VkImage image = g_ctx.swapchain_images[g_ctx.image_index];
-
-    image_barrier(
-        cmd,
-        image,
-        VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-        0,
-        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
-    );
-
-    const VkRenderingAttachmentInfo color{
-        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = g_ctx.swapchain_views[g_ctx.image_index],
-        .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .clearValue = {{{0.5f, 0.7f, 0.8f, 1.0f}}},
-    };
-    const VkRenderingInfo rendering{
-        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-        .renderArea = {.extent = g_ctx.swapchain_extent},
-        .layerCount = 1,
-        .colorAttachmentCount = 1,
-        .pColorAttachments = &color,
-    };
-    vkCmdBeginRendering(cmd, &rendering);
-    set_swapchain_viewport(cmd);
-    g_ctx.rendering_active = true;
-}
-
-static void end_swapchain_rendering() {
+void end_rendering_if_active() {
     if(!g_ctx.rendering_active) {
         return;
     }
 
-    const VkCommandBuffer cmd = vk_command_buffer();
-    vkCmdEndRendering(cmd);
+    vkCmdEndRendering(vk_command_buffer());
     g_ctx.rendering_active = false;
+    g_ctx.rendering_to_swapchain = false;
+}
+
+static void transition_swapchain_to_present() {
+    if(g_ctx.swapchain_layout != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
+        return;
+    }
 
     image_barrier(
-        cmd,
+        vk_command_buffer(),
         g_ctx.swapchain_images[g_ctx.image_index],
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
         VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
-        0
+        0,
+        VK_IMAGE_ASPECT_COLOR_BIT
     );
+    g_ctx.swapchain_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 }
 
 void vk_init(GLFWwindow* window) {
@@ -794,7 +750,9 @@ void begin_frame() {
     vk_check(vkBeginCommandBuffer(frame.command_buffer, &begin_ci));
 
     g_ctx.frame_active = true;
-    begin_swapchain_rendering();
+    g_ctx.rendering_active = false;
+    g_ctx.rendering_to_swapchain = false;
+    g_ctx.swapchain_layout = VK_IMAGE_LAYOUT_UNDEFINED;
 }
 
 void end_frame() {
@@ -803,7 +761,9 @@ void end_frame() {
     }
 
     InFlightFrame& frame = g_ctx.frames[g_ctx.frame_index];
-    end_swapchain_rendering();
+    // ImGui draws into the swapchain rendering left open by blit_to_screen.
+    end_rendering_if_active();
+    transition_swapchain_to_present();
     vk_check(vkEndCommandBuffer(frame.command_buffer));
 
     const VkSemaphoreSubmitInfo wait{

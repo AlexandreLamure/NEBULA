@@ -7,6 +7,8 @@
 
 namespace OM3D {
 
+// Not a VkFramebuffer. Stores the attachments we are currently drawing into;
+// bind() drives vkCmdBeginRendering (Vulkan 1.3 dynamic rendering).
 class Framebuffer : NonCopyable {
     public:
         template<size_t N>
@@ -14,13 +16,14 @@ class Framebuffer : NonCopyable {
         }
 
 
+        // Default framebuffer = current swapchain image (GL FBO 0).
         Framebuffer();
         Framebuffer(Texture* depth);
 
         Framebuffer(Framebuffer&&) = default;
         Framebuffer& operator=(Framebuffer&&) = default;
 
-        ~Framebuffer();
+        ~Framebuffer() = default;
 
         void bind(bool clear_depth, bool clear_color) const;
 
@@ -29,8 +32,11 @@ class Framebuffer : NonCopyable {
     private:
         Framebuffer(Texture* depth, Texture** colors, size_t count);
 
-        GLHandle _handle;
-        glm::uvec2 _size = {};
+        Texture* _depth = nullptr;
+        std::array<Texture*, 8> _colors = {};
+        u32 _color_count = 0;
+        mutable glm::uvec2 _size = {};
+        bool _swapchain = false;
 };
 
 }

@@ -81,6 +81,7 @@ struct GraphicsContext {
     VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
 
+    // FIXME: ugly state machine like OpenGL.
     const Program* bound_program = nullptr;
     BoundBuffer bound_vertex;
     BoundBuffer bound_index;
@@ -103,6 +104,9 @@ struct GraphicsContext {
     u32 image_index = 0;
     bool frame_active = false;
     bool rendering_active = false;
+    bool rendering_to_swapchain = false;
+    // Per-frame: UNDEFINED until Framebuffer binds the swapchain; PRESENT after end_frame.
+    VkImageLayout swapchain_layout = VK_IMAGE_LAYOUT_UNDEFINED;
 };
 GraphicsContext& ctx();
 
@@ -126,6 +130,22 @@ inline void vk_check(VkResult result) {
 
 // One-shot command buffer: record, submit, wait. Used for staging uploads (and later compute init).
 void immediate_submit(std::function<void(VkCommandBuffer)>&& record);
+
+void image_barrier(
+    VkCommandBuffer cmd,
+    VkImage image,
+    VkImageLayout old_layout,
+    VkImageLayout new_layout,
+    VkPipelineStageFlags2 src_stage,
+    VkAccessFlags2 src_access,
+    VkPipelineStageFlags2 dst_stage,
+    VkAccessFlags2 dst_access,
+    VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT
+);
+
+// Ends the current vkCmdBeginRendering if any. Does not transition the swapchain to PRESENT
+// (end_frame does that after ImGui has drawn into the same rendering).
+void end_rendering_if_active();
 
 // Enqueue Vulkan objects tagged with the in-flight frame that may still be using them.
 // Texture (Chapter 10) will use the image/view/sampler overloads.

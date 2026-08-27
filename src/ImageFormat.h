@@ -3,6 +3,8 @@
 
 #include <utils.h>
 
+#include <volk.h>
+
 namespace OM3D {
 
 enum class ImageFormat {
@@ -25,6 +27,8 @@ struct ImageFormatGL {
 };
 
 ImageFormatGL image_format_to_gl(ImageFormat format);
+
+VkFormat image_format_to_vk(ImageFormat format);
 
 }
 

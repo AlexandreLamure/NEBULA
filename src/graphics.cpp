@@ -1,6 +1,7 @@
 #include "VkContext.h"
 #include "graphics.h"
 
+#include "Framebuffer.h"
 #include "Texture.h"
 #include "TimestampQuery.h"
 #include "Program.h"
@@ -193,11 +194,9 @@ void draw_full_screen_triangle() {
 void blit_to_screen(const Texture& tex) {
     const std::shared_ptr<Program> blit_program = Program::from_files("passthrough.frag", "screen.vert");
 
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glDisable(GL_DEPTH_TEST); // In case glfw gives us a depth buffer
-
-    int viewport[4] = {};
-    glGetIntegerv(GL_VIEWPORT, viewport);
+    // Default Framebuffer = current swapchain view (GL FBO 0). Left open so ImGui can draw
+    // into the same rendering with loadOp LOAD on a later bind; end_frame closes it.
+    Framebuffer().bind(false, false);
 
     blit_program->bind();
     tex.bind(0);
