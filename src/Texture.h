@@ -3,6 +3,7 @@
 
 #include <graphics.h>
 #include <ImageFormat.h>
+#include <VkContext.h>
 
 #include <volk.h>
 
@@ -29,13 +30,18 @@ enum class WrapMode {
     Clamp,
 };
 
+enum class TextureType {
+    Tex2D,
+    Cube,
+};
+
 class Texture {
 
     public:
         Texture() = default;
 
-        Texture(Texture&&) = default;
-        Texture& operator=(Texture&&) = default;
+        Texture(Texture&& other) noexcept;
+        Texture& operator=(Texture&& other) noexcept;
 
         ~Texture();
 
@@ -51,15 +57,14 @@ class Texture {
         void bind(u32 index) const;
         void bind_as_image(u32 index, AccessType access);
 
-        u64 bindless_handle() const;
-
-        u32 texture_type() const;
+        TextureType texture_type() const;
 
         glm::uvec2 size() const;
 
         static u32 mip_levels(glm::uvec2 size);
 
         VkImageView vk_view() const { return _view; }
+        VkImageView vk_storage_view() const { return _storage_view ? _storage_view : _view; }
         VkImageLayout vk_layout() const { return _layout; }
         WrapMode wrap_mode() const { return _wrap; }
         VkFormat vk_format() const { return image_format_to_vk(_format); }
@@ -69,18 +74,21 @@ class Texture {
         friend class Framebuffer;
         friend class Program;
 
+        void swap(Texture& other);
+        void destroy();
+
         // Chapter 10 owns creation; Framebuffer (Chapter 8) only needs view + tracked layout.
         VkImage _image = VK_NULL_HANDLE;
+        VmaAllocation _allocation = nullptr;
         VkImageView _view = VK_NULL_HANDLE;
+        VkImageView _storage_view = VK_NULL_HANDLE;
         VkImageLayout _layout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-        GLHandle _handle;
         glm::uvec2 _size = {};
-        u64 _bindless = {};
+        u32 _mip_levels = 1;
         ImageFormat _format;
         WrapMode _wrap = WrapMode::Repeat;
-
-        u32 _texture_type = {};
+        TextureType _type = TextureType::Tex2D;
 };
 
 }

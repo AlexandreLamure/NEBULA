@@ -577,9 +577,9 @@ void flush_descriptor_bindings() {
 
     VkDescriptorImageInfo storage_info{};
     const Texture* storage_texture = g_ctx.bound_storage_image.texture;
-    if(storage_texture && storage_texture->vk_view()) {
+    if(storage_texture && storage_texture->vk_storage_view()) {
         storage_info = {
-            .imageView = storage_texture->vk_view(),
+            .imageView = storage_texture->vk_storage_view(),
             .imageLayout = g_ctx.bound_storage_image.layout,
         };
     } else {
