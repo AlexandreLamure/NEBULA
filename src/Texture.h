@@ -59,6 +59,12 @@ class Texture {
 
         static u32 mip_levels(glm::uvec2 size);
 
+        VkImageView vk_view() const { return _view; }
+        VkImageLayout vk_layout() const { return _layout; }
+        WrapMode wrap_mode() const { return _wrap; }
+        VkFormat vk_format() const { return image_format_to_vk(_format); }
+        bool is_cube() const;
+
     private:
         friend class Framebuffer;
         friend class Program;
@@ -72,6 +78,7 @@ class Texture {
         glm::uvec2 _size = {};
         u64 _bindless = {};
         ImageFormat _format;
+        WrapMode _wrap = WrapMode::Repeat;
 
         u32 _texture_type = {};
 };

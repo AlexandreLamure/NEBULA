@@ -45,6 +45,8 @@ void StaticMesh::draw() const {
         audit_bindings();
     }
 
+    flush_descriptor_bindings();
+
     glDrawElements(GL_TRIANGLES, int(_index_buffer.element_count()), GL_UNSIGNED_INT, nullptr);
 }
 

@@ -1,5 +1,6 @@
 #include "Texture.h"
 #include "Program.h"
+#include "VkContext.h"
 
 #include <volk.h>
 
@@ -61,6 +62,7 @@ Texture::Texture(const glm::uvec2 &size, ImageFormat format, WrapMode wrap) :
     _handle(create_texture_handle(GL_TEXTURE_2D)),
     _size(size),
     _format(format),
+    _wrap(wrap),
     _texture_type(GL_TEXTURE_2D) {
 
     const ImageFormatGL gl_format = image_format_to_gl(_format);
@@ -85,6 +87,7 @@ Texture Texture::empty_cubemap(u32 size, ImageFormat format, u32 mipmaps) {
         cube._texture_type = GL_TEXTURE_CUBE_MAP;
         cube._size = glm::uvec2(size);
         cube._format = format;
+        cube._wrap = WrapMode::Clamp;
     }
 
     const ImageFormatGL gl_format = image_format_to_gl(cube._format);
@@ -114,7 +117,7 @@ Texture Texture::cubemap_from_equirec(const Texture& equirec) {
         cube.bind_as_image(1, AccessType::WriteOnly);
 
         Program::from_file("equirec_cube.comp")->bind();
-        glDispatchCompute(face_size / 8, face_size / 8, 6);
+        dispatch_compute(face_size / 8, face_size / 8, 6);
 
         glGenerateTextureMipmap(cube._handle.get());
     }
@@ -135,10 +138,14 @@ bool Texture::is_null() const {
 
 void Texture::bind(u32 index) const {
     glBindTextureUnit(index, _handle.get());
+    if(index < gl_texture_slot_count) {
+        ctx().bound_textures[index].texture = this;
+    }
 }
 
 void Texture::bind_as_image(u32 index, AccessType access) {
     glBindImageTexture(index, _handle.get(), 0, texture_type() != GL_TEXTURE_2D, 0, access_type_to_gl(access), image_format_to_gl(_format).internal_format);
+    ctx().bound_storage_image = {this, VK_IMAGE_LAYOUT_GENERAL};
 }
 
 u64 Texture::bindless_handle() const {
@@ -157,6 +164,10 @@ glm::uvec2 Texture::size() const {
 u32 Texture::mip_levels(glm::uvec2 size) {
     const float side = float(std::max(size.x, size.y));
     return 1 + u32(std::floor(std::log2(side)));
+}
+
+bool Texture::is_cube() const {
+    return _texture_type == GL_TEXTURE_CUBE_MAP;
 }
 
 }

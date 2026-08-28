@@ -15,6 +15,14 @@
 
 namespace OM3D {
 
+// TODO: maybe make a descriptor set per pass type
+// Descriptor set 0 — one layout for the whole engine (GL bind emulator):
+//   0: frame UBO (ByteBuffer::bind Uniform, 0)
+//   1: point-light SSBO (ByteBuffer::bind Storage, 1)
+//   2-5: material textures (Texture::bind GL slots 0-3)
+//   6-7: env cubemap / BRDF LUT (Texture::bind GL slots 4-5)
+//   8: storage image (Texture::bind_as_image, compute writes)
+
 Texture brdf_lut_texture;
 
 struct {
@@ -121,7 +129,7 @@ void init_graphics(GLFWwindow* window) {
 
         brdf_program->bind();
         brdf_lut_texture.bind_as_image(0, AccessType::WriteOnly);
-        glDispatchCompute(512 / 8, 512 / 8, 1);
+        dispatch_compute(512 / 8, 512 / 8, 1);
     }
 
     {
@@ -181,6 +189,8 @@ void draw_full_screen_triangle() {
         ctx().bound_program->bind();
         ctx().bound_program->flush_push_constants();
     }
+
+    flush_descriptor_bindings();
 
     glDisableVertexAttribArray(0);
     glDisableVertexAttribArray(1);

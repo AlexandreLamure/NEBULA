@@ -5,6 +5,9 @@
 #include <GLFW/glfw3.h>
 
 #include "Program.h"
+#include "Texture.h"
+#include "graphics.h"
+#include "ImageFormat.h"
 
 #include <algorithm>
 #include <cstring>
@@ -300,14 +303,6 @@ static void create_frames() {
 }
 
 static void create_pipeline_layout() {
-    // One set for the whole engine. Bindings match the Slang [[vk::binding(n)]] slots.
-    // Chapter 9 will allocate descriptor sets from this layout at draw time.
-    //   0: frame UBO
-    //   1: point-light SSBO
-    //   2-5: material textures (GL slots 0-3)
-    //   6: env cubemap (GL slot 4)
-    //   7: BRDF LUT (GL slot 5)
-    //   8: storage image (compute)
     const VkDescriptorSetLayoutBinding bindings[] = {
         {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr},
         {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr},
@@ -339,6 +334,290 @@ static void create_pipeline_layout() {
         .pPushConstantRanges = &push,
     };
     vk_check(vkCreatePipelineLayout(g_ctx.device, &layout_ci, nullptr, &g_ctx.pipeline_layout));
+}
+
+static void create_samplers() {
+    VkPhysicalDeviceProperties props{};
+    vkGetPhysicalDeviceProperties(g_ctx.physical_device, &props);
+
+    const auto make_sampler = [&](VkSamplerAddressMode address_mode) {
+        const VkSamplerCreateInfo ci{
+            .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            .magFilter = VK_FILTER_LINEAR,
+            .minFilter = VK_FILTER_LINEAR,
+            .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+            .addressModeU = address_mode,
+            .addressModeV = address_mode,
+            .addressModeW = address_mode,
+            .mipLodBias = 0.0f,
+            .anisotropyEnable = VK_TRUE,
+            .maxAnisotropy = props.limits.maxSamplerAnisotropy,
+            .minLod = 0.0f,
+            .maxLod = VK_LOD_CLAMP_NONE,
+        };
+        VkSampler sampler = VK_NULL_HANDLE;
+        vk_check(vkCreateSampler(g_ctx.device, &ci, nullptr, &sampler));
+        return sampler;
+    };
+
+    g_ctx.sampler_repeat = make_sampler(VK_SAMPLER_ADDRESS_MODE_REPEAT);
+    g_ctx.sampler_clamp = make_sampler(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
+}
+
+static void create_fallback_sampled_texture() {
+    const VkImageCreateInfo image_ci{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = VK_FORMAT_R8G8B8A8_UNORM,
+        .extent = {1, 1, 1},
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    };
+    const VmaAllocationCreateInfo alloc_ci{
+        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+    };
+    vk_check(vmaCreateImage(g_ctx.allocator, &image_ci, &alloc_ci, &g_ctx.fallback_sampled_image, &g_ctx.fallback_sampled_allocation, nullptr));
+
+    const VkImageViewCreateInfo view_ci{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = g_ctx.fallback_sampled_image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = VK_FORMAT_R8G8B8A8_UNORM,
+        .subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .levelCount = 1,
+            .layerCount = 1,
+        },
+    };
+    vk_check(vkCreateImageView(g_ctx.device, &view_ci, nullptr, &g_ctx.fallback_sampled_view));
+
+    immediate_submit([&](VkCommandBuffer cmd) {
+        image_barrier(
+            cmd,
+            g_ctx.fallback_sampled_image,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+            0,
+            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT
+        );
+
+        const u8 black[4] = {0, 0, 0, 255};
+
+        VkBuffer staging_buffer = VK_NULL_HANDLE;
+        VmaAllocation staging_allocation = nullptr;
+        {
+            const VkBufferCreateInfo buffer_ci{
+                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                .size = sizeof(black),
+                .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            };
+            const VmaAllocationCreateInfo staging_alloc{
+                .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+                .usage = VMA_MEMORY_USAGE_AUTO,
+            };
+            VmaAllocationInfo info{};
+            vk_check(vmaCreateBuffer(g_ctx.allocator, &buffer_ci, &staging_alloc, &staging_buffer, &staging_allocation, &info));
+            std::memcpy(info.pMappedData, black, sizeof(black));
+        }
+        DEFER(vmaDestroyBuffer(g_ctx.allocator, staging_buffer, staging_allocation));
+
+        const VkBufferImageCopy copy{
+            .bufferOffset = 0,
+            .bufferRowLength = 0,
+            .bufferImageHeight = 0,
+            .imageSubresource = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .mipLevel = 0,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+            .imageOffset = {0, 0, 0},
+            .imageExtent = {1, 1, 1},
+        };
+        vkCmdCopyBufferToImage(cmd, staging_buffer, g_ctx.fallback_sampled_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+
+        image_barrier(
+            cmd,
+            g_ctx.fallback_sampled_image,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+            VK_ACCESS_2_SHADER_READ_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT
+        );
+    });
+}
+
+static void create_descriptor_pool() {
+    static constexpr u32 max_sets_per_frame = 512;
+    const VkDescriptorPoolSize pool_sizes[] = {
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, max_sets_per_frame},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, max_sets_per_frame},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, max_sets_per_frame * gl_texture_slot_count},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, max_sets_per_frame},
+    };
+    const VkDescriptorPoolCreateInfo pool_ci{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_POOL_CREATE_RESET_DESCRIPTOR_POOL_BIT,
+        .maxSets = max_sets_per_frame,
+        .poolSizeCount = u32(std::size(pool_sizes)),
+        .pPoolSizes = pool_sizes,
+    };
+    vk_check(vkCreateDescriptorPool(g_ctx.device, &pool_ci, nullptr, &g_ctx.descriptor_pool));
+}
+
+static VkSampler sampler_for_texture(const Texture* texture) {
+    if(!texture) {
+        return g_ctx.sampler_repeat;
+    }
+    return texture->wrap_mode() == WrapMode::Clamp ? g_ctx.sampler_clamp : g_ctx.sampler_repeat;
+}
+
+static VkImageLayout sampled_layout_for_texture(const Texture* texture) {
+    if(!texture || texture->vk_layout() == VK_IMAGE_LAYOUT_UNDEFINED) {
+        return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+    return texture->vk_layout();
+}
+
+static const Texture* default_texture_for_slot(u32 gl_slot) {
+    switch(gl_slot) {
+        case 0:
+        case 3:
+            return default_white_texture().get();
+        case 1:
+            return default_normal_texture().get();
+        case 2:
+            return default_metal_rough_texture().get();
+        default:
+            return default_black_texture().get();
+    }
+}
+
+static VkDescriptorImageInfo sampled_image_info(u32 gl_slot) {
+    const Texture* texture = g_ctx.bound_textures[gl_slot].texture;
+    if(!texture) {
+        texture = default_texture_for_slot(gl_slot);
+    }
+
+    VkImageView view = g_ctx.fallback_sampled_view;
+    if(texture && texture->vk_view()) {
+        view = texture->vk_view();
+    }
+
+    return {
+        .sampler = sampler_for_texture(texture),
+        .imageView = view,
+        .imageLayout = sampled_layout_for_texture(texture),
+    };
+}
+
+void flush_descriptor_bindings() {
+    if(!g_ctx.frame_active || !g_ctx.descriptor_pool || !g_ctx.pipeline_layout) {
+        return;
+    }
+
+    VkDescriptorSet set = VK_NULL_HANDLE;
+    const VkDescriptorSetAllocateInfo alloc_ci{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = g_ctx.descriptor_pool,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &g_ctx.descriptor_set_layout,
+    };
+    vk_check(vkAllocateDescriptorSets(g_ctx.device, &alloc_ci, &set));
+
+    VkDescriptorBufferInfo buffer_infos[2] = {};
+    VkWriteDescriptorSet writes[descriptor_binding_count] = {};
+    u32 write_count = 0;
+
+    for(u32 binding = 0; binding < 2; ++binding) {
+        const BoundBuffer& bound = g_ctx.bound_descriptors[binding];
+        if(!bound.buffer) {
+            continue;
+        }
+
+        buffer_infos[binding] = {
+            .buffer = bound.buffer,
+            .offset = 0,
+            .range = bound.size ? bound.size : VK_WHOLE_SIZE,
+        };
+        writes[write_count++] = {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = set,
+            .dstBinding = binding,
+            .descriptorCount = 1,
+            .descriptorType = binding == 0 ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .pBufferInfo = &buffer_infos[binding],
+        };
+    }
+
+    VkDescriptorImageInfo sampled_infos[gl_texture_slot_count] = {};
+    for(u32 gl_slot = 0; gl_slot != gl_texture_slot_count; ++gl_slot) {
+        sampled_infos[gl_slot] = sampled_image_info(gl_slot);
+        writes[write_count++] = {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = set,
+            .dstBinding = descriptor_texture_binding_base + gl_slot,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &sampled_infos[gl_slot],
+        };
+    }
+
+    VkDescriptorImageInfo storage_info{};
+    const Texture* storage_texture = g_ctx.bound_storage_image.texture;
+    if(storage_texture && storage_texture->vk_view()) {
+        storage_info = {
+            .imageView = storage_texture->vk_view(),
+            .imageLayout = g_ctx.bound_storage_image.layout,
+        };
+    } else {
+        storage_info = {
+            .imageView = g_ctx.fallback_sampled_view,
+            .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+        };
+    }
+    writes[write_count++] = {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = set,
+        .dstBinding = 8,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+        .pImageInfo = &storage_info,
+    };
+
+    vkUpdateDescriptorSets(g_ctx.device, write_count, writes, 0, nullptr);
+
+    const VkPipelineBindPoint bind_point =
+        (g_ctx.bound_program && g_ctx.bound_program->is_compute())
+            ? VK_PIPELINE_BIND_POINT_COMPUTE
+            : VK_PIPELINE_BIND_POINT_GRAPHICS;
+    vkCmdBindDescriptorSets(
+        vk_command_buffer(),
+        bind_point,
+        g_ctx.pipeline_layout,
+        0,
+        1,
+        &set,
+        0,
+        nullptr
+    );
+}
+
+void dispatch_compute(u32 x, u32 y, u32 z) {
+    flush_descriptor_bindings();
+    vkCmdDispatch(vk_command_buffer(), x, y, z);
 }
 
 static void create_immediate_pool() {
@@ -694,6 +973,9 @@ void vk_init(GLFWwindow* window) {
     create_frames();
     create_immediate_pool();
     create_pipeline_layout();
+    create_samplers();
+    create_fallback_sampled_texture();
+    create_descriptor_pool();
 }
 
 void begin_frame() {
@@ -716,6 +998,13 @@ void begin_frame() {
     g_ctx.bound_index = {};
     for(BoundBuffer& bound : g_ctx.bound_descriptors) {
         bound = {};
+    }
+    for(BoundSampledTexture& bound : g_ctx.bound_textures) {
+        bound = {};
+    }
+    g_ctx.bound_storage_image = {};
+    if(g_ctx.descriptor_pool) {
+        vk_check(vkResetDescriptorPool(g_ctx.device, g_ctx.descriptor_pool, 0));
     }
     vk_check(vkWaitForFences(g_ctx.device, 1, &frame.submitted, VK_TRUE, UINT64_MAX));
     flush_frame_deletions(g_ctx.frame_index);
@@ -820,6 +1109,27 @@ void vk_destroy() {
     if(g_ctx.immediate_pool) {
         vkDestroyCommandPool(g_ctx.device, g_ctx.immediate_pool, nullptr);
         g_ctx.immediate_pool = VK_NULL_HANDLE;
+    }
+    if(g_ctx.descriptor_pool) {
+        vkDestroyDescriptorPool(g_ctx.device, g_ctx.descriptor_pool, nullptr);
+        g_ctx.descriptor_pool = VK_NULL_HANDLE;
+    }
+    if(g_ctx.fallback_sampled_view) {
+        vkDestroyImageView(g_ctx.device, g_ctx.fallback_sampled_view, nullptr);
+        g_ctx.fallback_sampled_view = VK_NULL_HANDLE;
+    }
+    if(g_ctx.fallback_sampled_image) {
+        vmaDestroyImage(g_ctx.allocator, g_ctx.fallback_sampled_image, g_ctx.fallback_sampled_allocation);
+        g_ctx.fallback_sampled_image = VK_NULL_HANDLE;
+        g_ctx.fallback_sampled_allocation = nullptr;
+    }
+    if(g_ctx.sampler_repeat) {
+        vkDestroySampler(g_ctx.device, g_ctx.sampler_repeat, nullptr);
+        g_ctx.sampler_repeat = VK_NULL_HANDLE;
+    }
+    if(g_ctx.sampler_clamp) {
+        vkDestroySampler(g_ctx.device, g_ctx.sampler_clamp, nullptr);
+        g_ctx.sampler_clamp = VK_NULL_HANDLE;
     }
     if(g_ctx.pipeline_layout) {
         vkDestroyPipelineLayout(g_ctx.device, g_ctx.pipeline_layout, nullptr);

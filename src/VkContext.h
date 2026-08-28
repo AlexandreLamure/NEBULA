@@ -18,9 +18,13 @@ struct GLFWwindow;
 namespace OM3D {
 
 class Program;
+class Texture;
 
 static constexpr u32 frames_in_flight = 2;
 static constexpr u32 descriptor_binding_count = 9;
+// OpenGL texture units 0-5 map to descriptor bindings 2-7 (see graphics.cpp).
+static constexpr u32 gl_texture_slot_count = 6;
+static constexpr u32 descriptor_texture_binding_base = 2;
 
 struct InFlightFrame {
     VkCommandPool command_pool = VK_NULL_HANDLE;
@@ -30,10 +34,19 @@ struct InFlightFrame {
     VkSemaphore render = VK_NULL_HANDLE;
 };
 
-// Sticky GL-style bind points. Chapter 9 will flush these into a descriptor set at draw time.
+// Sticky GL-style bind points, flushed into one descriptor set at draw/dispatch time.
 struct BoundBuffer {
     VkBuffer buffer = VK_NULL_HANDLE;
     VkDeviceSize size = 0;
+};
+
+struct BoundSampledTexture {
+    const Texture* texture = nullptr;
+};
+
+struct BoundStorageImage {
+    const Texture* texture = nullptr;
+    VkImageLayout layout = VK_IMAGE_LAYOUT_GENERAL;
 };
 
 // GPU work is often one frame behind the CPU. Destroying a VkBuffer at the end of
@@ -80,12 +93,21 @@ struct GraphicsContext {
 
     VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
+    VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
+
+    VkSampler sampler_repeat = VK_NULL_HANDLE;
+    VkSampler sampler_clamp = VK_NULL_HANDLE;
+    VkImage fallback_sampled_image = VK_NULL_HANDLE;
+    VmaAllocation fallback_sampled_allocation = nullptr;
+    VkImageView fallback_sampled_view = VK_NULL_HANDLE;
 
     // FIXME: ugly state machine like OpenGL.
     const Program* bound_program = nullptr;
     BoundBuffer bound_vertex;
     BoundBuffer bound_index;
     BoundBuffer bound_descriptors[descriptor_binding_count] = {};
+    BoundSampledTexture bound_textures[gl_texture_slot_count] = {};
+    BoundStorageImage bound_storage_image;
     bool alpha_blend = false;
     bool has_vertex_input = true;
     VkFormat rendering_color_format = VK_FORMAT_B8G8R8A8_SRGB;
@@ -158,6 +180,11 @@ void defer_destroy(VkShaderModule module);
 
 void flush_frame_deletions(u32 frame_slot);
 void flush_all_deletions();
+
+// Allocate one descriptor set from the per-frame pool, write bindings, vkCmdBindDescriptorSets.
+void flush_descriptor_bindings();
+
+void dispatch_compute(u32 x, u32 y, u32 z);
 
 }
 
