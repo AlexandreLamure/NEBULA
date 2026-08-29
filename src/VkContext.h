@@ -108,7 +108,12 @@ struct GraphicsContext {
     BoundBuffer bound_descriptors[descriptor_binding_count] = {};
     BoundSampledTexture bound_textures[gl_texture_slot_count] = {};
     BoundStorageImage bound_storage_image;
+    // Raster state written by Material::bind(), applied after vkCmdBindPipeline
+    // (blend is baked into the pipeline; depth/cull are Vulkan 1.3 dynamic state).
     bool alpha_blend = false;
+    bool depth_test_enable = true;
+    VkCompareOp depth_compare_op = VK_COMPARE_OP_GREATER_OR_EQUAL;
+    VkCullModeFlags cull_mode = VK_CULL_MODE_BACK_BIT;
     bool has_vertex_input = true;
     VkFormat rendering_color_format = VK_FORMAT_B8G8R8A8_SRGB;
     VkFormat rendering_depth_format = VK_FORMAT_UNDEFINED;

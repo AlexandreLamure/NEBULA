@@ -47,40 +47,37 @@ void Material::set_stored_uniform(u32 name_hash, UniformValue value) {
     _uniforms.emplace_back(name_hash, std::move(value));
 }
 
+// Material::bind() = OpenGL-style sticky intent (blend, depth, cull, textures, uniforms)
+// Program::bind() = bind pipeline, then vkCmdSetCullMode / DepthTestEnable / DepthCompareOp from that intent
+// TODO: change that OpenGL styicky state machine to a more Vulkan-like approach.
 void Material::bind() const {
-    ctx().alpha_blend = (_blend_mode == BlendMode::Alpha);
+    GraphicsContext& c = ctx();
 
-    switch(_blend_mode) {
-        case BlendMode::None:
-            glDisable(GL_BLEND);
-        break;
+    // Blend is not dynamic in Vulkan 1.3: Program picks a pipeline variant from this flag.
+    c.alpha_blend = (_blend_mode == BlendMode::Alpha);
 
-        case BlendMode::Alpha:
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        break;
-    }
+    // Depth/cull *are* dynamic. Program::bind() issues the vkCmdSet* after the pipeline is bound.
+    c.cull_mode = _double_sided ? VK_CULL_MODE_NONE : VK_CULL_MODE_BACK_BIT;
 
     switch(_depth_test_mode) {
         case DepthTestMode::None:
-            glDisable(GL_DEPTH_TEST);
+            c.depth_test_enable = false;
         break;
 
         case DepthTestMode::Equal:
-            glEnable(GL_DEPTH_TEST);
-            glDepthFunc(GL_EQUAL);
+            c.depth_test_enable = true;
+            c.depth_compare_op = VK_COMPARE_OP_EQUAL;
         break;
 
         case DepthTestMode::Standard:
-            glEnable(GL_DEPTH_TEST);
-            // We are using reverse-Z
-            glDepthFunc(GL_GEQUAL);
+            c.depth_test_enable = true;
+            // Reverse-Z: nearer fragments have *greater* depth.
+            c.depth_compare_op = VK_COMPARE_OP_GREATER_OR_EQUAL;
         break;
 
         case DepthTestMode::Reversed:
-            glEnable(GL_DEPTH_TEST);
-            // We are using reverse-Z
-            glDepthFunc(GL_LEQUAL);
+            c.depth_test_enable = true;
+            c.depth_compare_op = VK_COMPARE_OP_LESS_OR_EQUAL;
         break;
     }
 

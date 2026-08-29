@@ -339,9 +339,10 @@ void Program::bind() const {
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute_pipeline);
     } else {
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, get_or_create_pipeline());
-        vkCmdSetCullMode(cmd, VK_CULL_MODE_BACK_BIT);
-        vkCmdSetDepthTestEnable(cmd, VK_TRUE);
-        vkCmdSetDepthCompareOp(cmd, VK_COMPARE_OP_GREATER_OR_EQUAL);
+        // Dynamic state is undefined after a pipeline bind; re-apply Material's sticky raster state.
+        vkCmdSetCullMode(cmd, ctx().cull_mode);
+        vkCmdSetDepthTestEnable(cmd, ctx().depth_test_enable ? VK_TRUE : VK_FALSE);
+        vkCmdSetDepthCompareOp(cmd, ctx().depth_compare_op);
     }
 
     flush_push_constants();
