@@ -192,13 +192,12 @@ void draw_full_screen_triangle() {
 
     flush_descriptor_bindings();
 
-    glDisableVertexAttribArray(0);
-    glDisableVertexAttribArray(1);
-    glDisableVertexAttribArray(2);
-    glDisableVertexAttribArray(3);
-    glDisableVertexAttribArray(4);
+    if(!ctx().frame_active) {
+        return;
+    }
 
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    // No vertex buffer: screen.slang uses SV_VertexID (formerly gl_VertexID).
+    vkCmdDraw(vk_command_buffer(), 3, 1, 0, 0);
 }
 
 void blit_to_screen(const Texture& tex) {

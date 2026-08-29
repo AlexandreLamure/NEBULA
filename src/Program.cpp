@@ -118,6 +118,8 @@ static VkPipeline create_graphics_pipeline(VkShaderModule vert, VkShaderModule f
         },
     };
 
+    // Fixed Vertex layout (locations 0–4). This is pipeline state, not per-draw like glVertexAttribPointer.
+    // Fullscreen pipelines pass vertex_input = false and use SV_VertexID instead.
     VkVertexInputBindingDescription binding{
         .binding = 0,
         .stride = u32(sizeof(Vertex)),

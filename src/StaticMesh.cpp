@@ -24,30 +24,23 @@ void StaticMesh::draw() const {
     _vertex_buffer.bind(BufferUsage::Attribute);
     _index_buffer.bind(BufferUsage::Index);
 
-    // Vertex position
-    glVertexAttribPointer(0, 3, GL_FLOAT, false, sizeof(Vertex), nullptr);
-    // Vertex normal
-    glVertexAttribPointer(1, 3, GL_FLOAT, false, sizeof(Vertex), reinterpret_cast<void*>(3 * sizeof(float)));
-    // Vertex uv
-    glVertexAttribPointer(2, 2, GL_FLOAT, false, sizeof(Vertex), reinterpret_cast<void*>(6 * sizeof(float)));
-    // Tangent / bitangent sign
-    glVertexAttribPointer(3, 4, GL_FLOAT, false, sizeof(Vertex), reinterpret_cast<void*>(8 * sizeof(float)));
-    // Vertex color
-    glVertexAttribPointer(4, 3, GL_FLOAT, false, sizeof(Vertex), reinterpret_cast<void*>(12 * sizeof(float)));
-
-    glEnableVertexAttribArray(0);
-    glEnableVertexAttribArray(1);
-    glEnableVertexAttribArray(2);
-    glEnableVertexAttribArray(3);
-    glEnableVertexAttribArray(4);
-
     if(audit_bindings_before_draw) {
         audit_bindings();
     }
 
     flush_descriptor_bindings();
 
-    glDrawElements(GL_TRIANGLES, int(_index_buffer.element_count()), GL_UNSIGNED_INT, nullptr);
+    if(!ctx().frame_active) {
+        return;
+    }
+
+    // Vertex layout is baked into the pipeline (see Program). Here we only bind which buffers to pull from.
+    const VkCommandBuffer cmd = vk_command_buffer();
+    const VkBuffer vertex = ctx().bound_vertex.buffer;
+    const VkDeviceSize offset = 0;
+    vkCmdBindVertexBuffers(cmd, 0, 1, &vertex, &offset);
+    vkCmdBindIndexBuffer(cmd, ctx().bound_index.buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(cmd, u32(_index_buffer.element_count()), 1, 0, 0, 0);
 }
 
 }
