@@ -442,7 +442,12 @@ int main(int argc, char** argv) {
 
         begin_frame();
 
-        // Draw everything
+        // Same frame graph as OpenGL, now recorded into this frame's command buffer:
+        //   HDR + depth  → scene (sun, point lights, IBL, sky)
+        //   RGBA8        → ACES tonemap (samples the HDR; exposure is a push constant)
+        //   swapchain    → blit + ImGui; end_frame submits and presents
+        // Switching Framebuffer::bind ends the previous rendering and makes its
+        // color attachments sampleable (COLOR_ATTACHMENT → SHADER_READ_ONLY).
         {
             PROFILE_GPU("Frame");
 

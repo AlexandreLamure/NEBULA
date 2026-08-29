@@ -1,4 +1,4 @@
-// GPU-side copies of the C++ structs in shader_structs.h (which still includes structs.glsl).
+// GPU-side copies of the C++ structs in shader_structs.h.
 // Keep the padding: Vulkan UBOs use std140-like rules, so a float3 is followed by 4 bytes.
 // Fields are `public` so other modules can read them after `import structs;`.
 

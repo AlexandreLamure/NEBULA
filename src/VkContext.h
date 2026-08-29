@@ -134,6 +134,11 @@ struct GraphicsContext {
     bool frame_active = false;
     bool rendering_active = false;
     bool rendering_to_swapchain = false;
+    // Offscreen color attachments of the current vkCmdBeginRendering. After
+    // vkCmdEndRendering they become SHADER_READ_ONLY so the next pass can sample
+    // them (GL: unbind the FBO, then bind its texture). Swapchain is not a Texture.
+    Texture* rendering_colors[8] = {};
+    u32 rendering_color_count = 0;
     // Per-frame: UNDEFINED until Framebuffer binds the swapchain; PRESENT after end_frame.
     VkImageLayout swapchain_layout = VK_IMAGE_LAYOUT_UNDEFINED;
 };
@@ -181,8 +186,9 @@ void image_barrier(
     VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT
 );
 
-// Ends the current vkCmdBeginRendering if any. Does not transition the swapchain to PRESENT
-// (end_frame does that after ImGui has drawn into the same rendering).
+// Ends the current vkCmdBeginRendering if any. Offscreen color attachments
+// become SHADER_READ_ONLY so the next pass can sample them. Does not transition
+// the swapchain to PRESENT (end_frame does that after ImGui has drawn).
 void end_rendering_if_active();
 
 // Enqueue Vulkan objects tagged with the in-flight frame that may still be using them.

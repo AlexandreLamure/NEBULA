@@ -838,6 +838,29 @@ void end_rendering_if_active() {
     vkCmdEndRendering(vk_command_buffer());
     g_ctx.rendering_active = false;
     g_ctx.rendering_to_swapchain = false;
+
+    // You cannot change an attachment's layout while it is being rendered to.
+    // After EndRendering, the offscreen colors are just images: make them
+    // sampleable so the next pass (tonemap, blit) can bind them as textures.
+    const VkCommandBuffer cmd = vk_command_buffer();
+    for(u32 i = 0; i != g_ctx.rendering_color_count; ++i) {
+        Texture* tex = g_ctx.rendering_colors[i];
+        if(!tex || tex->vk_layout() != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
+            continue;
+        }
+        image_barrier(
+            cmd,
+            tex->vk_image(),
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+            VK_ACCESS_2_SHADER_SAMPLED_READ_BIT
+        );
+        tex->set_vk_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    }
+    g_ctx.rendering_color_count = 0;
 }
 
 static void transition_swapchain_to_present() {

@@ -138,6 +138,7 @@ void Framebuffer::bind(bool clear_depth, bool clear_color) const {
         c.rendering_color_format = c.swapchain_format;
         c.rendering_depth_format = VK_FORMAT_UNDEFINED;
         c.rendering_to_swapchain = true;
+        c.rendering_color_count = 0;
 
         vkCmdBeginRendering(cmd, &rendering);
         set_y_flipped_viewport(cmd, extent);
@@ -196,6 +197,10 @@ void Framebuffer::bind(bool clear_depth, bool clear_color) const {
         ? image_format_to_vk(_depth->_format)
         : VK_FORMAT_UNDEFINED;
     c.rendering_to_swapchain = false;
+    c.rendering_color_count = _color_count;
+    for(u32 i = 0; i != _color_count; ++i) {
+        c.rendering_colors[i] = _colors[i];
+    }
 
     vkCmdBeginRendering(cmd, &rendering);
     set_y_flipped_viewport(cmd, _size);

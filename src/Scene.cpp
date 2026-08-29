@@ -55,7 +55,11 @@ void Scene::set_sun(float altitude, float azimuth, glm::vec3 color) {
 }
 
 void Scene::render() const {
-    // Fill and bind frame data buffer
+    // These TypedBuffers are stack locals destroyed at the end of render().
+    // OpenGL hid GPU lag; Vulkan is often one frame behind, so ~ByteBuffer
+    // enqueues the VkBuffer and the deletion queue frees it after this frame's fence.
+
+    // Fill and bind frame data buffer (descriptor 0: UBO)
     TypedBuffer<shader::FrameData> buffer(nullptr, 1);
     {
         auto mapping = buffer.map(AccessType::WriteOnly);
@@ -69,7 +73,7 @@ void Scene::render() const {
     }
     buffer.bind(BufferUsage::Uniform, 0);
 
-    // Fill and bind lights buffer
+    // Fill and bind lights buffer (descriptor 1: SSBO)
     TypedBuffer<shader::PointLight> light_buffer(nullptr, std::max(_point_lights.size(), size_t(1)));
     {
         auto mapping = light_buffer.map(AccessType::WriteOnly);
@@ -85,11 +89,9 @@ void Scene::render() const {
     }
     light_buffer.bind(BufferUsage::Storage, 1);
 
-    // Bind envmap
+    // GL texture units 4–5 → descriptor bindings 6–7 (see graphics.cpp)
     DEBUG_ASSERT(_envmap && !_envmap->is_null());
     _envmap->bind(4);
-
-    // Bind brdf lut needed for lighting to scene rendering shaders
     brdf_lut().bind(5);
 
     // Render the sky
