@@ -122,14 +122,43 @@ void init_graphics(GLFWwindow* window) {
     glBindVertexArray(global_vao);
 
     {
+        // Split-sum IBL: a 256² RG LUT of the BRDF scale/bias terms. Written once
+        // with a compute shader before the first frame (OpenGL did this with
+        // glDispatchCompute; we use immediate_submit so there is a command buffer).
         brdf_lut_texture = Texture(glm::uvec2(256), ImageFormat::RG16_UNORM, WrapMode::Clamp);
 
         std::shared_ptr<Program> brdf_program = Program::from_file("brdf.comp");
         DEBUG_ASSERT(brdf_program && brdf_program->is_compute());
 
-        brdf_program->bind();
-        brdf_lut_texture.bind_as_image(0, AccessType::WriteOnly);
-        dispatch_compute(512 / 8, 512 / 8, 1);
+        immediate_submit([&](VkCommandBuffer cmd) {
+            image_barrier(
+                cmd,
+                brdf_lut_texture.vk_image(),
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_GENERAL,
+                VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                0,
+                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                VK_ACCESS_2_SHADER_WRITE_BIT
+            );
+            brdf_lut_texture.set_vk_layout(VK_IMAGE_LAYOUT_GENERAL);
+
+            brdf_program->bind();
+            brdf_lut_texture.bind_as_image(0, AccessType::WriteOnly);
+            dispatch_compute(brdf_lut_texture.size().x / 8, brdf_lut_texture.size().y / 8, 1);
+
+            image_barrier(
+                cmd,
+                brdf_lut_texture.vk_image(),
+                VK_IMAGE_LAYOUT_GENERAL,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                VK_ACCESS_2_SHADER_WRITE_BIT,
+                VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                VK_ACCESS_2_SHADER_READ_BIT
+            );
+            brdf_lut_texture.set_vk_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        });
     }
 
     {

@@ -380,6 +380,8 @@ Texture::Texture(const glm::uvec2 &size, ImageFormat format, WrapMode wrap) :
         usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     } else {
         usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        // Compute (BRDF LUT) writes empty color images as storage.
+        usage |= VK_IMAGE_USAGE_STORAGE_BIT;
     }
 
     create_gpu_image(*this, size, format, TextureType::Tex2D, 1, usage);
@@ -415,6 +417,9 @@ Texture Texture::cubemap_from_equirec(const Texture& equirec) {
     Texture cube = empty_cubemap(face_size, ImageFormat::RGBA16_FLOAT, 9999);
 
     immediate_submit([&](VkCommandBuffer cmd) {
+        const VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+
+        // Compute writes mip 0 of all six faces as a 2D array (see _storage_view).
         texture_barrier(
             cmd,
             cube._image,
@@ -424,23 +429,19 @@ Texture Texture::cubemap_from_equirec(const Texture& equirec) {
             0,
             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
             VK_ACCESS_2_SHADER_WRITE_BIT,
-            VK_IMAGE_ASPECT_COLOR_BIT,
+            aspect,
             0,
-            cube._mip_levels,
+            1,
             0,
             6
         );
         cube._layout = VK_IMAGE_LAYOUT_GENERAL;
-    });
 
-    equirec.bind(0);
-    cube.bind_as_image(1, AccessType::WriteOnly);
+        equirec.bind(0);
+        cube.bind_as_image(1, AccessType::WriteOnly);
+        Program::from_file("equirec_cube.comp")->bind();
+        dispatch_compute(face_size / 8, face_size / 8, 6);
 
-    Program::from_file("equirec_cube.comp")->bind();
-    dispatch_compute(face_size / 8, face_size / 8, 6);
-
-    immediate_submit([&](VkCommandBuffer cmd) {
-        const VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
         texture_barrier(
             cmd,
             cube._image,
@@ -456,6 +457,25 @@ Texture Texture::cubemap_from_equirec(const Texture& equirec) {
             0,
             6
         );
+
+        if(cube._mip_levels > 1) {
+            texture_barrier(
+                cmd,
+                cube._image,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                0,
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                aspect,
+                1,
+                cube._mip_levels - 1,
+                0,
+                6
+            );
+        }
+
         cube._layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         generate_mipmaps(cmd, cube);
     });

@@ -88,6 +88,8 @@ struct GraphicsContext {
 
     VmaAllocator allocator = VK_NULL_HANDLE;
     VkCommandPool immediate_pool = VK_NULL_HANDLE;
+    // Non-null while immediate_submit is recording; vk_command_buffer() prefers this.
+    VkCommandBuffer immediate_cmd = VK_NULL_HANDLE;
 
     std::string device_name;
 
@@ -148,14 +150,23 @@ inline u32 vk_queue_family() { return ctx().graphics_queue_family; }
 inline VkSurfaceKHR vk_surface() { return ctx().surface; }
 inline VmaAllocator device_allocator() { return ctx().allocator; }
 inline const std::string& device_name() { return ctx().device_name; }
-inline VkCommandBuffer vk_command_buffer() { return ctx().frames[ctx().frame_index].command_buffer; }
+inline VkCommandBuffer vk_command_buffer() {
+    if(ctx().immediate_cmd) {
+        return ctx().immediate_cmd;
+    }
+    return ctx().frames[ctx().frame_index].command_buffer;
+}
+inline bool vk_is_recording() {
+    return ctx().immediate_cmd || ctx().frame_active;
+}
 inline u32 vk_frame_index() { return ctx().frame_index; }
 
 inline void vk_check(VkResult result) {
     ALWAYS_ASSERT(result == VK_SUCCESS, "Vulkan call failed");
 }
 
-// One-shot command buffer: record, submit, wait. Used for staging uploads (and later compute init).
+// One-shot command buffer: record, submit, wait. Used for staging uploads and
+// init-time compute (BRDF LUT, env cubemap) so the result exists before the first frame.
 void immediate_submit(std::function<void(VkCommandBuffer)>&& record);
 
 void image_barrier(

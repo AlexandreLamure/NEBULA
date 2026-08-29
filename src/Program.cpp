@@ -330,7 +330,7 @@ VkPipeline Program::get_or_create_pipeline() const {
 void Program::bind() const {
     ctx().bound_program = this;
 
-    if(!ctx().frame_active) {
+    if(!vk_is_recording()) {
         return;
     }
 
@@ -349,7 +349,7 @@ void Program::bind() const {
 }
 
 void Program::flush_push_constants() const {
-    if(!ctx().frame_active || !ctx().pipeline_layout) {
+    if(!vk_is_recording() || !ctx().pipeline_layout) {
         return;
     }
     vkCmdPushConstants(

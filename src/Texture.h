@@ -63,9 +63,11 @@ class Texture {
 
         static u32 mip_levels(glm::uvec2 size);
 
+        VkImage vk_image() const { return _image; }
         VkImageView vk_view() const { return _view; }
         VkImageView vk_storage_view() const { return _storage_view ? _storage_view : _view; }
         VkImageLayout vk_layout() const { return _layout; }
+        void set_vk_layout(VkImageLayout layout) { _layout = layout; }
         WrapMode wrap_mode() const { return _wrap; }
         VkFormat vk_format() const { return image_format_to_vk(_format); }
         bool is_cube() const;

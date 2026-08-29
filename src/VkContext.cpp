@@ -524,7 +524,7 @@ static VkDescriptorImageInfo sampled_image_info(u32 gl_slot) {
 }
 
 void flush_descriptor_bindings() {
-    if(!g_ctx.frame_active || !g_ctx.descriptor_pool || !g_ctx.pipeline_layout) {
+    if(!vk_is_recording() || !g_ctx.descriptor_pool || !g_ctx.pipeline_layout) {
         return;
     }
 
@@ -616,6 +616,9 @@ void flush_descriptor_bindings() {
 }
 
 void dispatch_compute(u32 x, u32 y, u32 z) {
+    if(!vk_is_recording()) {
+        return;
+    }
     flush_descriptor_bindings();
     vkCmdDispatch(vk_command_buffer(), x, y, z);
 }
@@ -761,7 +764,14 @@ void immediate_submit(std::function<void(VkCommandBuffer)>&& record) {
         .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
     };
     vk_check(vkBeginCommandBuffer(cmd, &begin_ci));
+
+    // Install as the current command buffer so Program::bind / dispatch_compute
+    // (the GL-style API) record here instead of into a frame that is not active.
+    const VkCommandBuffer prev_immediate = g_ctx.immediate_cmd;
+    g_ctx.immediate_cmd = cmd;
     record(cmd);
+    g_ctx.immediate_cmd = prev_immediate;
+
     vk_check(vkEndCommandBuffer(cmd));
 
     const VkFenceCreateInfo fence_ci{
