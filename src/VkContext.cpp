@@ -1029,13 +1029,23 @@ void vk_init(GLFWwindow* window) {
         .synchronization2 = VK_TRUE,
         .dynamicRendering = VK_TRUE,
     };
+VkPhysicalDeviceVulkan12Features vk12_features{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        .pNext = &vk13_features,
+        .hostQueryReset = VK_TRUE,
+    };
+    VkPhysicalDeviceVulkan11Features vk11_features{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+        .pNext = &vk12_features,
+        .shaderDrawParameters = VK_TRUE,
+    };
     const VkPhysicalDeviceFeatures vk10_features{
         .samplerAnisotropy = VK_TRUE,
     };
 
     const VkDeviceCreateInfo device_ci{
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .pNext = &vk13_features,
+        .pNext = &vk11_features,
         .queueCreateInfoCount = 1,
         .pQueueCreateInfos = &queue_ci,
         .enabledExtensionCount = 1,
