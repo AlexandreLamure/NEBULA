@@ -410,7 +410,7 @@ static void create_fallback_sampled_texture() {
         .arrayLayers = 1,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .tiling = VK_IMAGE_TILING_OPTIMAL,
-        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
@@ -432,19 +432,6 @@ static void create_fallback_sampled_texture() {
     };
     vk_check(vkCreateImageView(g_ctx.device, &view_ci, nullptr, &g_ctx.fallback_sampled_view));
 
-    immediate_submit([&](VkCommandBuffer cmd) {
-        image_barrier(
-            cmd,
-            g_ctx.fallback_sampled_image,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-            0,
-            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-            VK_ACCESS_2_TRANSFER_WRITE_BIT,
-            VK_IMAGE_ASPECT_COLOR_BIT
-        );
-
         const u8 black[4] = {0, 0, 0, 255};
 
         VkBuffer staging_buffer = VK_NULL_HANDLE;
@@ -464,7 +451,19 @@ static void create_fallback_sampled_texture() {
             vk_check(vmaCreateBuffer(g_ctx.allocator, &buffer_ci, &staging_alloc, &staging_buffer, &staging_allocation, &info));
             std::memcpy(info.pMappedData, black, sizeof(black));
         }
-        DEFER(vmaDestroyBuffer(g_ctx.allocator, staging_buffer, staging_allocation));
+
+    immediate_submit([&](VkCommandBuffer cmd) {
+        image_barrier(
+            cmd,
+            g_ctx.fallback_sampled_image,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+            0,
+            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT
+        );
 
         const VkBufferImageCopy copy{
             .bufferOffset = 0,
@@ -493,6 +492,8 @@ static void create_fallback_sampled_texture() {
             VK_IMAGE_ASPECT_COLOR_BIT
         );
     });
+
+    vmaDestroyBuffer(g_ctx.allocator, staging_buffer, staging_allocation);
 }
 
 static void create_descriptor_pool() {

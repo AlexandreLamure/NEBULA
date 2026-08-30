@@ -172,28 +172,9 @@ void Texture::create_gpu_image(
     }
 }
 
-void Texture::upload_pixels(VkCommandBuffer cmd, const void* pixels, size_t byte_size) {
+void Texture::upload_pixels(VkCommandBuffer cmd, VkBuffer staging_buffer, size_t byte_size) {
     const VkImageAspectFlags aspect = aspect_for_format(_format);
     const u32 layers = _type == TextureType::Cube ? 6u : 1u;
-
-    VkBuffer staging_buffer = VK_NULL_HANDLE;
-    VmaAllocation staging_allocation = nullptr;
-    {
-        const VkBufferCreateInfo buffer_ci{
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = byte_size,
-            .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-        };
-        const VmaAllocationCreateInfo staging_alloc{
-            .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-            .usage = VMA_MEMORY_USAGE_AUTO,
-        };
-        VmaAllocationInfo info{};
-        vk_check(vmaCreateBuffer(device_allocator(), &buffer_ci, &staging_alloc, &staging_buffer, &staging_allocation, &info));
-        std::memcpy(info.pMappedData, pixels, byte_size);
-    }
-    DEFER(vmaDestroyBuffer(device_allocator(), staging_buffer, staging_allocation));
 
     texture_barrier(
         cmd,
@@ -348,10 +329,30 @@ void Texture::generate_mipmaps(VkCommandBuffer cmd) {
 }
 
 void Texture::finish_sampled_texture(const void* pixels, size_t byte_size) {
+    VkBuffer staging_buffer = VK_NULL_HANDLE;
+    VmaAllocation staging_allocation = nullptr;
+    {
+        const VkBufferCreateInfo buffer_ci{
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = byte_size,
+            .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        };
+        const VmaAllocationCreateInfo staging_alloc{
+            .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+            .usage = VMA_MEMORY_USAGE_AUTO,
+        };
+        VmaAllocationInfo info{};
+        vk_check(vmaCreateBuffer(device_allocator(), &buffer_ci, &staging_alloc, &staging_buffer, &staging_allocation, &info));
+        std::memcpy(info.pMappedData, pixels, byte_size);
+    }
+
     immediate_submit([&](VkCommandBuffer cmd) {
-        upload_pixels(cmd, pixels, byte_size);
+        upload_pixels(cmd, staging_buffer, byte_size);
         generate_mipmaps(cmd);
     });
+
+    vmaDestroyBuffer(device_allocator(), staging_buffer, staging_allocation);
 
     if(_layout == VK_IMAGE_LAYOUT_UNDEFINED) {
         _layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;

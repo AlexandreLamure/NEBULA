@@ -80,7 +80,7 @@ class Texture {
         void destroy();
 
         void create_gpu_image(glm::uvec2 size, ImageFormat format, TextureType type, u32 mip_levels, VkImageUsageFlags usage);
-        void upload_pixels(VkCommandBuffer cmd, const void* pixels, size_t byte_size);
+        void upload_pixels(VkCommandBuffer cmd, VkBuffer staging_buffer, size_t byte_size);
         void generate_mipmaps(VkCommandBuffer cmd);
         void finish_sampled_texture(const void* pixels, size_t byte_size);
 
