@@ -25,7 +25,7 @@ void compute_main(uint3 id : SV_DispatchThreadID) {
     out_cube.GetDimensions(face_w, face_h, layers);
     const float2 uv = (float2(id.xy) + 0.5) / float2(face_w, face_h);
     const float3 direction = normalize(cube_dir(uv, id.z));
-    const float4 color = in_equirec.Sample(to_equirec(direction));
+    const float4 color = in_equirec.SampleLevel(to_equirec(direction), 0.0);
 
     out_cube[id] = color;
 }
