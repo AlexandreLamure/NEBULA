@@ -1,5 +1,6 @@
 #include "Scene.h"
 
+#include "VkContext.h"
 #include <TypedBuffer.h>
 
 #include <shader_structs.h>
@@ -95,6 +96,7 @@ void Scene::render() const {
     brdf_lut().bind(5);
 
     // Render the sky
+    ctx().vertex_input = VertexLayout::None;
     _sky_material.bind();
     _sky_material.set_uniform(HASH("intensity"), _ibl_intensity);
     draw_full_screen_triangle();

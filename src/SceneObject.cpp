@@ -1,5 +1,7 @@
 #include "SceneObject.h"
 
+#include "VkContext.h"
+
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace OM3D {
@@ -15,6 +17,7 @@ void SceneObject::render() const {
     }
 
     _material->set_uniform(HASH("model"), transform());
+    ctx().vertex_input = VertexLayout::Mesh;
     _material->bind();
     _mesh->draw();
 }
