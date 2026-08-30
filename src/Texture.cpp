@@ -253,6 +253,22 @@ void Texture::generate_mipmaps(VkCommandBuffer cmd) {
             layers
         );
 
+        texture_barrier(
+            cmd,
+            _image,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+            0,
+            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            aspect,
+            mip,
+            1,
+            0,
+            layers
+        );
+
         const i32 next_width = std::max(1, mip_width / 2);
         const i32 next_height = std::max(1, mip_height / 2);
 
