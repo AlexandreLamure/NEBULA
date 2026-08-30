@@ -430,6 +430,8 @@ int main(int argc, char** argv) {
             glfwGetWindowSize(window, &width, &height);
 
             if(renderer.size != glm::uvec2(width, height)) {
+                // GPU may still be sampling last frame's HDR/depth; wait before rebuilding them.
+                wait_for_gpu_idle();
                 renderer = RendererState::create(glm::uvec2(width, height));
             }
         }

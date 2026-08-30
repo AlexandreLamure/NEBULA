@@ -160,6 +160,10 @@ GraphicsContext& ctx();
 void vk_init(GLFWwindow* window);
 void vk_destroy();
 
+// Wait until all submitted GPU work finishes. Required before recreating swapchain
+// images or offscreen attachments the GPU may still be reading/writing.
+void wait_for_gpu_idle();
+
 inline VkInstance vk_instance() { return ctx().instance; }
 inline VkPhysicalDevice vk_physical_device() { return ctx().physical_device; }
 inline VkDevice vk_device() { return ctx().device; }

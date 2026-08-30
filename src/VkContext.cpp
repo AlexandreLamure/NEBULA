@@ -258,6 +258,12 @@ static void create_swapchain() {
     }
 }
 
+void wait_for_gpu_idle() {
+    if(g_ctx.device) {
+        vkDeviceWaitIdle(g_ctx.device);
+    }
+}
+
 static void recreate_swapchain() {
     int width = 0;
     int height = 0;
@@ -266,7 +272,7 @@ static void recreate_swapchain() {
         return;
     }
 
-    vkDeviceWaitIdle(g_ctx.device);
+    wait_for_gpu_idle();
     destroy_swapchain();
     create_swapchain();
 }
@@ -1167,7 +1173,7 @@ void end_frame() {
 
 void vk_destroy() {
     if(g_ctx.device) {
-        vkDeviceWaitIdle(g_ctx.device);
+        wait_for_gpu_idle();
         flush_all_deletions();
     }
     destroy_frames();
