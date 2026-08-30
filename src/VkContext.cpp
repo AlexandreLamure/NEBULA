@@ -10,6 +10,7 @@
 #include "ImageFormat.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <iostream>
 #include <vector>
@@ -20,6 +21,15 @@ namespace OM3D {
 static GraphicsContext g_ctx;
 GraphicsContext& ctx() {
     return g_ctx;
+}
+
+void vk_check_impl(VkResult result, const char* call, const char* file, int line) {
+    if(result == VK_SUCCESS) {
+        return;
+    }
+    char msg[512];
+    std::snprintf(msg, sizeof(msg), "Vulkan call failed: %s (VkResult %d)", call, int(result));
+    fatal(msg, file, line);
 }
 
 #ifdef OM3D_DEBUG

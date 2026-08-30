@@ -187,9 +187,8 @@ inline bool vk_is_recording() {
 }
 inline u32 vk_frame_index() { return ctx().frame_index; }
 
-inline void vk_check(VkResult result) {
-    ALWAYS_ASSERT(result == VK_SUCCESS, "Vulkan call failed");
-}
+void vk_check_impl(VkResult result, const char* call, const char* file, int line);
+#define vk_check(call) ::OM3D::vk_check_impl((call), #call, __FILE__, __LINE__)
 
 // One-shot command buffer: record, submit, wait. Used for staging uploads and
 // init-time compute (BRDF LUT, env cubemap) so the result exists before the first frame.
