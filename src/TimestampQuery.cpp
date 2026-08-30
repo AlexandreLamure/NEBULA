@@ -1,8 +1,11 @@
 #include "TimestampQuery.h"
 
+#include "VkContext.h"
+
 #include <string>
 #include <deque>
 #include <vector>
+#include <array>
 
 #include <volk.h>
 
@@ -94,26 +97,57 @@ Span<ProfileZone> retrieve_profile() {
     return profile::ready;
 }
 
+void reset_timestamp_queries() {
+    GraphicsContext& c = ctx();
+    const u32 slot = c.frame_index;
+    VkQueryPool pool = c.timestamp_pools[slot];
+    if(!pool) {
+        return;
+    }
 
+    const u32 count = c.timestamp_allocated[slot];
+    if(count) {
+        std::array<u64, timestamp_queries_per_frame> ticks{};
+        vk_check(vkGetQueryPoolResults(
+            c.device,
+            pool,
+            0,
+            count,
+            count * sizeof(u64),
+            ticks.data(),
+            sizeof(u64),
+            VK_QUERY_RESULT_64_BIT
+        ));
 
+        for(auto& marker : profile::current_frame) {
+            marker.query.capture_from_pool(slot, ticks.data(), count);
+        }
+        for(auto& frame : profile::queued_frames) {
+            for(auto& marker : frame) {
+                marker.query.capture_from_pool(slot, ticks.data(), count);
+            }
+        }
+    }
 
+    vkResetQueryPool(c.device, pool, 0, timestamp_queries_per_frame);
+    c.timestamp_allocated[slot] = 0;
+}
 
+static u64 timestamp_mask() {
+    const u32 bits = ctx().timestamp_valid_bits;
+    if(bits == 0 || bits >= 64) {
+        return ~u64(0);
+    }
+    return (u64(1) << bits) - 1;
+}
 
-static auto create_query_handles() {
-    std::array<GLuint, 2> handles = {};
-    glGenQueries(u32(handles.size()), handles.data());
-    return handles;
+static double ticks_to_seconds(u64 begin_ticks, u64 end_ticks) {
+    const u64 delta = (end_ticks - begin_ticks) & timestamp_mask();
+    return double(delta) * double(ctx().timestamp_period) * 1e-9;
 }
 
 TimestampQuery::~TimestampQuery() {
     DEBUG_ASSERT(_state ==  State::Resolved || _state == State::Ended || _state == State::None);
-
-    if(auto handle = _begin.get()) {
-        glDeleteQueries(1, &handle);
-    }
-    if(auto handle = _end.get()) {
-        glDeleteQueries(1, &handle);
-    }
 }
 
 TimestampQuery::TimestampQuery(TimestampQuery&& other) {
@@ -126,8 +160,9 @@ TimestampQuery& TimestampQuery::operator=(TimestampQuery&& other) {
 }
 
 void TimestampQuery::swap(TimestampQuery& other) {
-    _begin.swap(other._begin);
-    _end.swap(other._end);
+    std::swap(_begin, other._begin);
+    std::swap(_end, other._end);
+    std::swap(_slot, other._slot);
     std::swap(_time, other._time);
     std::swap(_state, other._state);
 }
@@ -142,21 +177,51 @@ void TimestampQuery::begin() {
     DEBUG_ASSERT(_state == State::None);
     _state = State::Started;
 
-    if(!_begin.is_valid()) {
-        DEBUG_ASSERT(!_end.is_valid());
-
-        const auto handles = create_query_handles();
-        _begin = GLHandle(handles[0]);
-        _end = GLHandle(handles[1]);
+    if(!vk_is_recording()) {
+        return;
     }
 
-    glQueryCounter(_begin.get(), GL_TIMESTAMP);
+    GraphicsContext& c = ctx();
+    _slot = c.frame_index;
+    VkQueryPool pool = c.timestamp_pools[_slot];
+    if(!pool) {
+        return;
+    }
+
+    ALWAYS_ASSERT(c.timestamp_allocated[_slot] + 2 <= timestamp_queries_per_frame, "Too many GPU timestamps this frame");
+    _begin = c.timestamp_allocated[_slot];
+    _end = _begin + 1;
+    c.timestamp_allocated[_slot] += 2;
+
+    vkCmdWriteTimestamp2(vk_command_buffer(), VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, pool, _begin);
 }
 
 void TimestampQuery::end() {
     DEBUG_ASSERT(_state == State::Started);
     _state = State::Ended;
-    glQueryCounter(_end.get(), GL_TIMESTAMP);
+
+    if(_begin == ~0u) {
+        return;
+    }
+
+    VkQueryPool pool = ctx().timestamp_pools[_slot];
+    if(!pool || !vk_is_recording()) {
+        return;
+    }
+
+    vkCmdWriteTimestamp2(vk_command_buffer(), VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, pool, _end);
+}
+
+void TimestampQuery::capture_from_pool(u32 slot, const u64* ticks, u32 count) {
+    if(_state != State::Ended || _slot != slot || _begin == ~0u) {
+        return;
+    }
+    if(_begin >= count || _end >= count) {
+        return;
+    }
+
+    _time = ticks_to_seconds(ticks[_begin], ticks[_end]);
+    _state = State::Resolved;
 }
 
 Result<double> TimestampQuery::seconds(bool wait) const {
@@ -166,22 +231,40 @@ Result<double> TimestampQuery::seconds(bool wait) const {
 
     DEBUG_ASSERT(_state == State::Ended);
 
-    const u64 invalid_timestamp = u64(-1);
-    const GLenum pname = wait ? GL_QUERY_RESULT : GL_QUERY_RESULT_NO_WAIT;
-
-    u64 end_ns = invalid_timestamp;
-    glGetQueryObjectui64v(_end.get(), pname, &end_ns);
-    if(end_ns == invalid_timestamp) {
-        return {false, {}};
+    if(_begin == ~0u) {
+        _time = 0.0;
+        _state = State::Resolved;
+        return {true, _time};
     }
 
-    u64 begin_ns = invalid_timestamp;
-    glGetQueryObjectui64v(_begin.get(), pname, &begin_ns);
-    if(begin_ns == invalid_timestamp) {
-        return {false, {}};
+    VkQueryPool pool = ctx().timestamp_pools[_slot];
+    if(!pool) {
+        _time = 0.0;
+        _state = State::Resolved;
+        return {true, _time};
     }
 
-    _time = double(end_ns - begin_ns) / 1'000'000'000.0;
+    const VkQueryResultFlags flags = VK_QUERY_RESULT_64_BIT | (wait ? VK_QUERY_RESULT_WAIT_BIT : 0);
+
+    u64 end_ticks = 0;
+    const VkResult end_result = vkGetQueryPoolResults(
+        vk_device(), pool, _end, 1, sizeof(end_ticks), &end_ticks, sizeof(end_ticks), flags
+    );
+    if(end_result == VK_NOT_READY) {
+        return {false, {}};
+    }
+    vk_check(end_result);
+
+    u64 begin_ticks = 0;
+    const VkResult begin_result = vkGetQueryPoolResults(
+        vk_device(), pool, _begin, 1, sizeof(begin_ticks), &begin_ticks, sizeof(begin_ticks), flags
+    );
+    if(begin_result == VK_NOT_READY) {
+        return {false, {}};
+    }
+    vk_check(begin_result);
+
+    _time = ticks_to_seconds(begin_ticks, end_ticks);
     _state = State::Resolved;
 
     return {true, _time};

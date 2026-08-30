@@ -1,11 +1,15 @@
 #include "ImGuiRenderer.h"
 
+#include "VkContext.h"
+
 #include <TypedBuffer.h>
 
 #include <glm/vec2.hpp>
 
 #include <imgui/imgui.h>
 #include <volk.h>
+
+#include <cstddef>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -202,6 +206,7 @@ ImGuiRenderer::ImGuiRenderer(GLFWwindow* window) : _window(window) {
     _material.set_program(Program::from_files("imgui.frag", "imgui.vert"));
     _material.set_depth_test_mode(DepthTestMode::None);
     _material.set_blend_mode(BlendMode::Alpha);
+    _material.set_double_sided(true);
 
     _font = create_font();
 
@@ -237,6 +242,11 @@ float ImGuiRenderer::update_delta_time() {
 }
 
 void ImGuiRenderer::render(const ImDrawData* draw_data) {
+    static_assert(sizeof(ImDrawVert) == 20);
+    static_assert(offsetof(ImDrawVert, pos) == 0);
+    static_assert(offsetof(ImDrawVert, uv) == 8);
+    static_assert(offsetof(ImDrawVert, col) == 16);
+
     if(!draw_data->TotalIdxCount || !draw_data->TotalVtxCount) {
         return;
     }
@@ -248,16 +258,16 @@ void ImGuiRenderer::render(const ImDrawData* draw_data) {
         return;
     }
 
+    if(!ctx().frame_active) {
+        return;
+    }
+
     const ImVec2 clip_off = draw_data->DisplayPos;
     const ImVec2 clip_scale = draw_data->FramebufferScale;
 
+    ctx().vertex_input = VertexLayout::ImGui;
     _material.set_uniform(HASH("viewport_size"), glm::vec2(draw_data->DisplaySize.x, draw_data->DisplaySize.y));
     _material.bind();
-
-    glDisable(GL_CULL_FACE);
-
-    glEnable(GL_SCISSOR_TEST);
-    DEFER(glDisable(GL_SCISSOR_TEST));
 
     TypedBuffer<ImDrawIdx> index_buffer(nullptr, draw_data->TotalIdxCount);
     TypedBuffer<ImDrawVert> vertex_buffer(nullptr, draw_data->TotalVtxCount);
@@ -280,12 +290,21 @@ void ImGuiRenderer::render(const ImDrawData* draw_data) {
     index_buffer.bind(BufferUsage::Index);
     vertex_buffer.bind(BufferUsage::Attribute);
 
-    byte* vertex_offset = nullptr;
-    byte* index_offset = nullptr;
+    const VkCommandBuffer cmd_buf = vk_command_buffer();
+    const VkDeviceSize vtx_offset = 0;
+    vkCmdBindVertexBuffers(cmd_buf, 0, 1, &ctx().bound_vertex.buffer, &vtx_offset);
+    vkCmdBindIndexBuffer(
+        cmd_buf,
+        ctx().bound_index.buffer,
+        0,
+        sizeof(ImDrawIdx) == 2 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32
+    );
+
+    u32 idx_base = 0;
+    i32 vtx_base = 0;
     for(int c = 0; c != draw_data->CmdListsCount; ++c) {
         const ImDrawList* cmd_list = draw_data->CmdLists[c];
 
-        byte* drawn_index_offset = index_offset;
         for(int i = 0; i != cmd_list->CmdBuffer.Size; ++i) {
             const ImDrawCmd& cmd = cmd_list->CmdBuffer[i];
 
@@ -297,28 +316,40 @@ void ImGuiRenderer::render(const ImDrawData* draw_data) {
                 continue;
             }
 
-            glScissor(int(clip_min.x), int(height - clip_max.y), int(clip_max.x - clip_min.x), int(clip_max.y - clip_min.y));
+            // Vulkan scissors are top-left (OpenGL was bottom-left, so it flipped Y).
+            // The Y-flipped viewport does not affect scissor coordinates.
+            const i32 min_x = std::max(i32(clip_min.x), 0);
+            const i32 min_y = std::max(i32(clip_min.y), 0);
+            const i32 max_x = std::min(i32(clip_max.x), i32(width));
+            const i32 max_y = std::min(i32(clip_max.y), i32(height));
+            if(max_x <= min_x || max_y <= min_y) {
+                continue;
+            }
+
+            const VkRect2D scissor{
+                .offset = {min_x, min_y},
+                .extent = {u32(max_x - min_x), u32(max_y - min_y)},
+            };
+            vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
 
             if(Texture* tex = static_cast<Texture*>(cmd.TextureId)) {
                 tex->bind(0);
             }
 
-            glVertexAttribPointer(0, 2, GL_FLOAT, false, sizeof(ImDrawVert), vertex_offset);
-            glVertexAttribPointer(1, 2, GL_FLOAT, false, sizeof(ImDrawVert), vertex_offset + (2 * sizeof(float)));
-            glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, false, sizeof(ImDrawVert), vertex_offset + (4 * sizeof(float)));
+            flush_descriptor_bindings();
 
-            glEnableVertexAttribArray(0);
-            glEnableVertexAttribArray(1);
-            glEnableVertexAttribArray(2);
-            glDisableVertexAttribArray(3);
-            glDisableVertexAttribArray(4);
-
-            glDrawElements(GL_TRIANGLES, cmd.ElemCount, sizeof(ImDrawIdx) == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT, reinterpret_cast<void*>(drawn_index_offset));
-            drawn_index_offset += cmd.ElemCount * sizeof(ImDrawIdx);
+            vkCmdDrawIndexed(
+                cmd_buf,
+                cmd.ElemCount,
+                1,
+                idx_base + cmd.IdxOffset,
+                vtx_base + i32(cmd.VtxOffset),
+                0
+            );
         }
 
-        vertex_offset += cmd_list->VtxBuffer.Size * sizeof(ImDrawVert);
-        index_offset += cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx);
+        idx_base += u32(cmd_list->IdxBuffer.Size);
+        vtx_base += i32(cmd_list->VtxBuffer.Size);
     }
 }
 

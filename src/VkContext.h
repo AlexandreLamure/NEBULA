@@ -25,6 +25,15 @@ static constexpr u32 descriptor_binding_count = 9;
 // OpenGL texture units 0-5 map to descriptor bindings 2-7 (see graphics.cpp).
 static constexpr u32 gl_texture_slot_count = 6;
 static constexpr u32 descriptor_texture_binding_base = 2;
+// Two timestamps per PROFILE_GPU zone (begin + end).
+static constexpr u32 timestamp_queries_per_frame = 1024;
+
+// Vertex input is pipeline state in Vulkan (OpenGL set it per draw with glVertexAttribPointer).
+enum class VertexLayout : u32 {
+    None = 0,  // Fullscreen: SV_VertexID, no vertex buffer
+    Mesh = 1,  // Vertex.h locations 0–4
+    ImGui = 2, // ImDrawVert: float2 pos, float2 uv, RGBA8 unorm color
+};
 
 struct InFlightFrame {
     VkCommandPool command_pool = VK_NULL_HANDLE;
@@ -116,7 +125,7 @@ struct GraphicsContext {
     bool depth_test_enable = true;
     VkCompareOp depth_compare_op = VK_COMPARE_OP_GREATER_OR_EQUAL;
     VkCullModeFlags cull_mode = VK_CULL_MODE_BACK_BIT;
-    bool has_vertex_input = true;
+    VertexLayout vertex_input = VertexLayout::Mesh;
     VkFormat rendering_color_format = VK_FORMAT_B8G8R8A8_SRGB;
     VkFormat rendering_depth_format = VK_FORMAT_UNDEFINED;
 
@@ -129,6 +138,10 @@ struct GraphicsContext {
     std::vector<VkImageView> swapchain_views;
 
     InFlightFrame frames[frames_in_flight] = {};
+    VkQueryPool timestamp_pools[frames_in_flight] = {};
+    u32 timestamp_allocated[frames_in_flight] = {};
+    float timestamp_period = 1.0f;
+    u32 timestamp_valid_bits = 0;
     u32 frame_index = 0;
     u32 image_index = 0;
     bool frame_active = false;
@@ -207,6 +220,10 @@ void flush_all_deletions();
 void flush_descriptor_bindings();
 
 void dispatch_compute(u32 x, u32 y, u32 z);
+
+// Fence for this frame slot has been waited: copy timestamps into queued PROFILE_GPU
+// markers, then vkResetQueryPool so the slot can be recorded again.
+void reset_timestamp_queries();
 
 }
 

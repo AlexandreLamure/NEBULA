@@ -15,7 +15,7 @@ StaticMesh::StaticMesh(const MeshData& data) :
 }
 
 void StaticMesh::draw() const {
-    ctx().has_vertex_input = true;
+    ctx().vertex_input = VertexLayout::Mesh;
     if(ctx().bound_program) {
         ctx().bound_program->bind();
         ctx().bound_program->flush_push_constants();

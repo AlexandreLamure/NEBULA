@@ -213,7 +213,7 @@ void draw_full_screen_triangle() {
         audit_bindings();
     }
 
-    ctx().has_vertex_input = false;
+    ctx().vertex_input = VertexLayout::None;
     if(ctx().bound_program) {
         ctx().bound_program->bind();
         ctx().bound_program->flush_push_constants();

@@ -95,14 +95,15 @@ static VkShaderModule create_shader_module(const std::vector<u32>& spirv) {
     return module;
 }
 
+// TODO: make this a bit more implicit
 static u32 current_pipeline_key() {
     return u32(ctx().alpha_blend)
-         | (u32(ctx().has_vertex_input) << 1)
+         | (u32(ctx().vertex_input) << 1)
          | (u32(ctx().rendering_color_format) << 4)
          | (u32(ctx().rendering_depth_format) << 16);
 }
 
-static VkPipeline create_graphics_pipeline(VkShaderModule vert, VkShaderModule frag, bool alpha_blend, bool vertex_input) {
+static VkPipeline create_graphics_pipeline(VkShaderModule vert, VkShaderModule frag, bool alpha_blend, VertexLayout vertex_layout) {
     const VkPipelineShaderStageCreateInfo stages[] = {
         {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -118,28 +119,39 @@ static VkPipeline create_graphics_pipeline(VkShaderModule vert, VkShaderModule f
         },
     };
 
-    // Fixed Vertex layout (locations 0–4). This is pipeline state, not per-draw like glVertexAttribPointer.
-    // Fullscreen pipelines pass vertex_input = false and use SV_VertexID instead.
+    // Vertex layout is pipeline state, not per-draw like glVertexAttribPointer.
+    // Mesh: Vertex.h locations 0–4. ImGui: ImDrawVert. None: SV_VertexID, no buffer.
     VkVertexInputBindingDescription binding{
         .binding = 0,
-        .stride = u32(sizeof(Vertex)),
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
     };
-    const VkVertexInputAttributeDescription attrs[] = {
-        {0, 0, VK_FORMAT_R32G32B32_SFLOAT, u32(offsetof(Vertex, position))},
-        {1, 0, VK_FORMAT_R32G32B32_SFLOAT, u32(offsetof(Vertex, normal))},
-        {2, 0, VK_FORMAT_R32G32_SFLOAT, u32(offsetof(Vertex, uv))},
-        {3, 0, VK_FORMAT_R32G32B32A32_SFLOAT, u32(offsetof(Vertex, tangent_bitangent_sign))},
-        {4, 0, VK_FORMAT_R32G32B32_SFLOAT, u32(offsetof(Vertex, color))},
-    };
+    VkVertexInputAttributeDescription attrs[5] = {};
+    u32 attr_count = 0;
+
+    if(vertex_layout == VertexLayout::Mesh) {
+        binding.stride = u32(sizeof(Vertex));
+        attrs[0] = {0, 0, VK_FORMAT_R32G32B32_SFLOAT, u32(offsetof(Vertex, position))};
+        attrs[1] = {1, 0, VK_FORMAT_R32G32B32_SFLOAT, u32(offsetof(Vertex, normal))};
+        attrs[2] = {2, 0, VK_FORMAT_R32G32_SFLOAT, u32(offsetof(Vertex, uv))};
+        attrs[3] = {3, 0, VK_FORMAT_R32G32B32A32_SFLOAT, u32(offsetof(Vertex, tangent_bitangent_sign))};
+        attrs[4] = {4, 0, VK_FORMAT_R32G32B32_SFLOAT, u32(offsetof(Vertex, color))};
+        attr_count = 5;
+    } else if(vertex_layout == VertexLayout::ImGui) {
+        // Packed like ImDrawVert: float2 pos, float2 uv, RGBA8 unorm (20 bytes).
+        binding.stride = 20;
+        attrs[0] = {0, 0, VK_FORMAT_R32G32_SFLOAT, 0};
+        attrs[1] = {1, 0, VK_FORMAT_R32G32_SFLOAT, 8};
+        attrs[2] = {2, 0, VK_FORMAT_R8G8B8A8_UNORM, 16};
+        attr_count = 3;
+    }
 
     VkPipelineVertexInputStateCreateInfo vertex_input_state{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
     };
-    if(vertex_input) {
+    if(attr_count) {
         vertex_input_state.vertexBindingDescriptionCount = 1;
         vertex_input_state.pVertexBindingDescriptions = &binding;
-        vertex_input_state.vertexAttributeDescriptionCount = 5;
+        vertex_input_state.vertexAttributeDescriptionCount = attr_count;
         vertex_input_state.pVertexAttributeDescriptions = attrs;
     }
 
@@ -321,7 +333,7 @@ VkPipeline Program::get_or_create_pipeline() const {
         _vert_module,
         _frag_module,
         ctx().alpha_blend,
-        ctx().has_vertex_input
+        ctx().vertex_input
     );
     _pipelines.push_back({key, pipeline});
     return pipeline;

@@ -36,8 +36,12 @@ class TimestampQuery : NonCopyable {
         Result<double> seconds(bool wait = false) const;
 
     private:
-        GLHandle _begin;
-        GLHandle _end;
+        void capture_from_pool(u32 slot, const u64* ticks, u32 count);
+        friend void reset_timestamp_queries();
+
+        u32 _begin = ~0u;
+        u32 _end = ~0u;
+        u32 _slot = 0;
 
         mutable double _time = 0.0;
         mutable State _state = State::None;

@@ -302,6 +302,36 @@ static void create_frames() {
     }
 }
 
+static void create_timestamp_pools() {
+    u32 family_count = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(g_ctx.physical_device, &family_count, nullptr);
+    std::vector<VkQueueFamilyProperties> families(family_count);
+    vkGetPhysicalDeviceQueueFamilyProperties(g_ctx.physical_device, &family_count, families.data());
+    g_ctx.timestamp_valid_bits = families[g_ctx.graphics_queue_family].timestampValidBits;
+
+    if(!g_ctx.timestamp_valid_bits) {
+        return;
+    }
+
+    for(u32 i = 0; i != frames_in_flight; ++i) {
+        const VkQueryPoolCreateInfo pool_ci{
+            .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+            .queryType = VK_QUERY_TYPE_TIMESTAMP,
+            .queryCount = timestamp_queries_per_frame,
+        };
+        vk_check(vkCreateQueryPool(g_ctx.device, &pool_ci, nullptr, &g_ctx.timestamp_pools[i]));
+    }
+}
+
+static void destroy_timestamp_pools() {
+    for(u32 i = 0; i != frames_in_flight; ++i) {
+        if(g_ctx.timestamp_pools[i]) {
+            vkDestroyQueryPool(g_ctx.device, g_ctx.timestamp_pools[i], nullptr);
+            g_ctx.timestamp_pools[i] = VK_NULL_HANDLE;
+        }
+    }
+}
+
 static void create_pipeline_layout() {
     const VkDescriptorSetLayoutBinding bindings[] = {
         {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr},
@@ -955,6 +985,7 @@ void vk_init(GLFWwindow* window) {
     };
     vkGetPhysicalDeviceProperties2(g_ctx.physical_device, &props);
     g_ctx.device_name = props.properties.deviceName;
+    g_ctx.timestamp_period = props.properties.limits.timestampPeriod;
     std::cout << "Vulkan 1.3 initialized on " << g_ctx.device_name << std::endl;
 
     const float queue_priority = 1.0f;
@@ -1004,6 +1035,7 @@ void vk_init(GLFWwindow* window) {
 
     create_swapchain();
     create_frames();
+    create_timestamp_pools();
     create_immediate_pool();
     create_pipeline_layout();
     create_samplers();
@@ -1041,6 +1073,7 @@ void begin_frame() {
     }
     vk_check(vkWaitForFences(g_ctx.device, 1, &frame.submitted, VK_TRUE, UINT64_MAX));
     flush_frame_deletions(g_ctx.frame_index);
+    reset_timestamp_queries();
     vk_check(vkResetFences(g_ctx.device, 1, &frame.submitted));
     vk_check(vkResetCommandPool(g_ctx.device, frame.command_pool, 0));
 
@@ -1138,6 +1171,7 @@ void vk_destroy() {
         flush_all_deletions();
     }
     destroy_frames();
+    destroy_timestamp_pools();
     destroy_swapchain();
     if(g_ctx.immediate_pool) {
         vkDestroyCommandPool(g_ctx.device, g_ctx.immediate_pool, nullptr);
