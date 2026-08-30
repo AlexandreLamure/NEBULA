@@ -41,6 +41,7 @@ struct InFlightFrame {
     VkFence submitted = VK_NULL_HANDLE;
     VkSemaphore acquire = VK_NULL_HANDLE;
     VkSemaphore render = VK_NULL_HANDLE;
+    VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
 };
 
 // Sticky GL-style bind points, flushed into one descriptor set at draw/dispatch time.
@@ -104,7 +105,7 @@ struct GraphicsContext {
 
     VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
-    VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
+    VkDescriptorPool immediate_descriptor_pool = VK_NULL_HANDLE;
 
     VkSampler sampler_repeat = VK_NULL_HANDLE;
     VkSampler sampler_clamp = VK_NULL_HANDLE;

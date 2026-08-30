@@ -166,6 +166,9 @@ static void destroy_frames() {
         if(frame.render) {
             vkDestroySemaphore(g_ctx.device, frame.render, nullptr);
         }
+        if(frame.descriptor_pool) {
+            vkDestroyDescriptorPool(g_ctx.device, frame.descriptor_pool, nullptr);
+        }
         frame = {};
     }
 }
@@ -496,7 +499,7 @@ static void create_fallback_sampled_texture() {
     vmaDestroyBuffer(g_ctx.allocator, staging_buffer, staging_allocation);
 }
 
-static void create_descriptor_pool() {
+static void create_descriptor_pool(VkDescriptorPool& pool) {
     static constexpr u32 max_sets_per_frame = 512;
     const VkDescriptorPoolSize pool_sizes[] = {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, max_sets_per_frame},
@@ -506,11 +509,19 @@ static void create_descriptor_pool() {
     };
     const VkDescriptorPoolCreateInfo pool_ci{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
         .maxSets = max_sets_per_frame,
         .poolSizeCount = u32(std::size(pool_sizes)),
         .pPoolSizes = pool_sizes,
     };
-    vk_check(vkCreateDescriptorPool(g_ctx.device, &pool_ci, nullptr, &g_ctx.descriptor_pool));
+    vk_check(vkCreateDescriptorPool(g_ctx.device, &pool_ci, nullptr, &pool));
+}
+
+static void create_descriptor_pools() {
+    for(InFlightFrame& frame : g_ctx.frames) {
+        create_descriptor_pool(frame.descriptor_pool);
+    }
+    create_descriptor_pool(g_ctx.immediate_descriptor_pool);
 }
 
 static VkSampler sampler_for_texture(const Texture* texture) {
@@ -560,14 +571,20 @@ static VkDescriptorImageInfo sampled_image_info(u32 gl_slot) {
 }
 
 void flush_descriptor_bindings() {
-    if(!vk_is_recording() || !g_ctx.descriptor_pool || !g_ctx.pipeline_layout) {
+    VkDescriptorPool pool = VK_NULL_HANDLE;
+    if(g_ctx.immediate_cmd) {
+        pool = g_ctx.immediate_descriptor_pool;
+    } else if(g_ctx.frame_active) {
+        pool = g_ctx.frames[g_ctx.frame_index].descriptor_pool;
+    }
+    if(!pool || !g_ctx.pipeline_layout) {
         return;
     }
 
     VkDescriptorSet set = VK_NULL_HANDLE;
     const VkDescriptorSetAllocateInfo alloc_ci{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .descriptorPool = g_ctx.descriptor_pool,
+        .descriptorPool = pool,
         .descriptorSetCount = 1,
         .pSetLayouts = &g_ctx.descriptor_set_layout,
     };
@@ -785,6 +802,9 @@ void defer_destroy(VkShaderModule module) {
 
 void immediate_submit(std::function<void(VkCommandBuffer)>&& record) {
     ALWAYS_ASSERT(g_ctx.immediate_pool && g_ctx.graphics_queue, "immediate_submit called before vk_init");
+    if(g_ctx.immediate_descriptor_pool) {
+        vk_check(vkResetDescriptorPool(g_ctx.device, g_ctx.immediate_descriptor_pool, 0));
+    }
 
     const VkCommandBufferAllocateInfo alloc_ci{
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -1046,7 +1066,7 @@ void vk_init(GLFWwindow* window) {
     create_pipeline_layout();
     create_samplers();
     create_fallback_sampled_texture();
-    create_descriptor_pool();
+    create_descriptor_pools();
 }
 
 void begin_frame() {
@@ -1074,10 +1094,10 @@ void begin_frame() {
         bound = {};
     }
     g_ctx.bound_storage_image = {};
-    if(g_ctx.descriptor_pool) {
-        vk_check(vkResetDescriptorPool(g_ctx.device, g_ctx.descriptor_pool, 0));
-    }
     vk_check(vkWaitForFences(g_ctx.device, 1, &frame.submitted, VK_TRUE, UINT64_MAX));
+    if(frame.descriptor_pool) {
+        vk_check(vkResetDescriptorPool(g_ctx.device, frame.descriptor_pool, 0));
+    }
     flush_frame_deletions(g_ctx.frame_index);
     reset_timestamp_queries();
     vk_check(vkResetFences(g_ctx.device, 1, &frame.submitted));
@@ -1183,9 +1203,9 @@ void vk_destroy() {
         vkDestroyCommandPool(g_ctx.device, g_ctx.immediate_pool, nullptr);
         g_ctx.immediate_pool = VK_NULL_HANDLE;
     }
-    if(g_ctx.descriptor_pool) {
-        vkDestroyDescriptorPool(g_ctx.device, g_ctx.descriptor_pool, nullptr);
-        g_ctx.descriptor_pool = VK_NULL_HANDLE;
+    if(g_ctx.immediate_descriptor_pool) {
+        vkDestroyDescriptorPool(g_ctx.device, g_ctx.immediate_descriptor_pool, nullptr);
+        g_ctx.immediate_descriptor_pool = VK_NULL_HANDLE;
     }
     if(g_ctx.fallback_sampled_view) {
         vkDestroyImageView(g_ctx.device, g_ctx.fallback_sampled_view, nullptr);
