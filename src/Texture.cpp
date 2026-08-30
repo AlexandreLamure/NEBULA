@@ -437,7 +437,8 @@ Texture Texture::cubemap_from_equirec(const Texture& equirec) {
 
         equirec.bind(0);
         cube.bind_as_image(1, AccessType::WriteOnly);
-        Program::from_file("equirec_cube.comp")->bind();
+        const std::shared_ptr<Program> equirec_program = Program::from_file("equirec_cube.comp");
+        equirec_program->bind();
         dispatch_compute(face_size / 8, face_size / 8, 6);
 
         texture_barrier(
