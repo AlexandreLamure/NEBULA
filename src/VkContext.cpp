@@ -140,6 +140,11 @@ static int rate_device(VkPhysicalDevice physical, VkSurfaceKHR surface, u32* out
 }
 
 static void destroy_swapchain() {
+    for(VkSemaphore sem : g_ctx.swapchain_render_semaphores) {
+        vkDestroySemaphore(g_ctx.device, sem, nullptr);
+    }
+    g_ctx.swapchain_render_semaphores.clear();
+
     for(VkImageView view : g_ctx.swapchain_views) {
         vkDestroyImageView(g_ctx.device, view, nullptr);
     }
@@ -162,9 +167,6 @@ static void destroy_frames() {
         }
         if(frame.acquire) {
             vkDestroySemaphore(g_ctx.device, frame.acquire, nullptr);
-        }
-        if(frame.render) {
-            vkDestroySemaphore(g_ctx.device, frame.render, nullptr);
         }
         if(frame.descriptor_pool) {
             vkDestroyDescriptorPool(g_ctx.device, frame.descriptor_pool, nullptr);
@@ -259,6 +261,14 @@ static void create_swapchain() {
         };
         vk_check(vkCreateImageView(g_ctx.device, &view_ci, nullptr, &g_ctx.swapchain_views[i]));
     }
+
+    g_ctx.swapchain_render_semaphores.resize(actual_count);
+    const VkSemaphoreCreateInfo sem_ci{
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+    };
+    for(u32 i = 0; i != actual_count; ++i) {
+        vk_check(vkCreateSemaphore(g_ctx.device, &sem_ci, nullptr, &g_ctx.swapchain_render_semaphores[i]));
+    }
 }
 
 void wait_for_gpu_idle() {
@@ -307,7 +317,6 @@ static void create_frames() {
             .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
         };
         vk_check(vkCreateSemaphore(g_ctx.device, &sem_ci, nullptr, &frame.acquire));
-        vk_check(vkCreateSemaphore(g_ctx.device, &sem_ci, nullptr, &frame.render));
     }
 }
 
@@ -1152,6 +1161,7 @@ void end_frame() {
     }
 
     InFlightFrame& frame = g_ctx.frames[g_ctx.frame_index];
+    VkSemaphore& render_sem = g_ctx.swapchain_render_semaphores[g_ctx.image_index];
     // ImGui draws into the swapchain rendering left open by blit_to_screen.
     end_rendering_if_active();
     transition_swapchain_to_present();
@@ -1168,7 +1178,7 @@ void end_frame() {
     };
     const VkSemaphoreSubmitInfo signal{
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-        .semaphore = frame.render,
+        .semaphore = render_sem,
         .stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
     };
     const VkSubmitInfo2 submit{
@@ -1185,7 +1195,7 @@ void end_frame() {
     const VkPresentInfoKHR present{
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &frame.render,
+        .pWaitSemaphores = &render_sem,
         .swapchainCount = 1,
         .pSwapchains = &g_ctx.swapchain,
         .pImageIndices = &g_ctx.image_index,

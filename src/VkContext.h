@@ -40,7 +40,6 @@ struct InFlightFrame {
     VkCommandBuffer command_buffer = VK_NULL_HANDLE;
     VkFence submitted = VK_NULL_HANDLE;
     VkSemaphore acquire = VK_NULL_HANDLE;
-    VkSemaphore render = VK_NULL_HANDLE;
     VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
 };
 
@@ -137,6 +136,10 @@ struct GraphicsContext {
     VkExtent2D swapchain_extent = {};
     std::vector<VkImage> swapchain_images;
     std::vector<VkImageView> swapchain_views;
+    // One render-complete semaphore per swapchain image. Reusing a per-frame
+    // semaphore is invalid when image_count > frames_in_flight: present may still
+    // be waiting on it for a different image index.
+    std::vector<VkSemaphore> swapchain_render_semaphores;
 
     InFlightFrame frames[frames_in_flight] = {};
     VkQueryPool timestamp_pools[frames_in_flight] = {};
