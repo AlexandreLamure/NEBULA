@@ -362,21 +362,17 @@ void load_default_scene() {
     }
 }
 
+// TODO: maybe remove that class
 struct RendererState {
-    static RendererState create(glm::uvec2 size) {
-        RendererState state;
-
-        state.size = size;
-
-        if(state.size.x > 0 && state.size.y > 0) {
-            state.depth_texture = Texture(size, ImageFormat::Depth32_FLOAT, WrapMode::Clamp);
-            state.lit_hdr_texture = Texture(size, ImageFormat::RGBA16_FLOAT, WrapMode::Clamp);
-            state.tone_mapped_texture = Texture(size, ImageFormat::RGBA8_UNORM, WrapMode::Clamp);
-            state.main_framebuffer = Framebuffer(&state.depth_texture, std::array{&state.lit_hdr_texture});
-            state.tone_map_framebuffer = Framebuffer(nullptr, std::array{&state.tone_mapped_texture});
+    void resize(glm::uvec2 size) {
+        this->size = size;
+        if(size.x > 0 && size.y > 0) {
+            depth_texture = Texture(size, ImageFormat::Depth32_FLOAT, WrapMode::Clamp);
+            lit_hdr_texture = Texture(size, ImageFormat::RGBA16_FLOAT, WrapMode::Clamp);
+            tone_mapped_texture = Texture(size, ImageFormat::RGBA8_UNORM, WrapMode::Clamp);
+            main_framebuffer = Framebuffer(&depth_texture, std::array{&lit_hdr_texture});
+            tone_map_framebuffer = Framebuffer(nullptr, std::array{&tone_mapped_texture});
         }
-
-        return state;
     }
 
     glm::uvec2 size = {};
@@ -432,7 +428,7 @@ int main(int argc, char** argv) {
             if(renderer.size != glm::uvec2(width, height)) {
                 // GPU may still be sampling last frame's HDR/depth; wait before rebuilding them.
                 wait_for_gpu_idle();
-                renderer = RendererState::create(glm::uvec2(width, height));
+                renderer.resize(glm::uvec2(width, height));
             }
         }
 

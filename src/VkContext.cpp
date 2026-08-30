@@ -435,25 +435,25 @@ static void create_fallback_sampled_texture() {
     };
     vk_check(vkCreateImageView(g_ctx.device, &view_ci, nullptr, &g_ctx.fallback_sampled_view));
 
-        const u8 black[4] = {0, 0, 0, 255};
+    const u8 black[4] = {0, 0, 0, 255};
 
-        VkBuffer staging_buffer = VK_NULL_HANDLE;
-        VmaAllocation staging_allocation = nullptr;
-        {
-            const VkBufferCreateInfo buffer_ci{
-                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-                .size = sizeof(black),
-                .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-            };
-            const VmaAllocationCreateInfo staging_alloc{
-                .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-                .usage = VMA_MEMORY_USAGE_AUTO,
-            };
-            VmaAllocationInfo info{};
-            vk_check(vmaCreateBuffer(g_ctx.allocator, &buffer_ci, &staging_alloc, &staging_buffer, &staging_allocation, &info));
-            std::memcpy(info.pMappedData, black, sizeof(black));
-        }
+    VkBuffer staging_buffer = VK_NULL_HANDLE;
+    VmaAllocation staging_allocation = nullptr;
+    {
+        const VkBufferCreateInfo buffer_ci{
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = sizeof(black),
+            .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        };
+        const VmaAllocationCreateInfo staging_alloc{
+            .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+            .usage = VMA_MEMORY_USAGE_AUTO,
+        };
+        VmaAllocationInfo info{};
+        vk_check(vmaCreateBuffer(g_ctx.allocator, &buffer_ci, &staging_alloc, &staging_buffer, &staging_allocation, &info));
+        std::memcpy(info.pMappedData, black, sizeof(black));
+    }
 
     immediate_submit([&](VkCommandBuffer cmd) {
         image_barrier(
@@ -1029,7 +1029,7 @@ void vk_init(GLFWwindow* window) {
         .synchronization2 = VK_TRUE,
         .dynamicRendering = VK_TRUE,
     };
-VkPhysicalDeviceVulkan12Features vk12_features{
+    VkPhysicalDeviceVulkan12Features vk12_features{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
         .pNext = &vk13_features,
         .hostQueryReset = VK_TRUE,
