@@ -20,13 +20,13 @@ enum class ImageFormat {
 };
 
 
-struct ImageFormatGL {
-    u32 format;
-    u32 internal_format;
-    u32 component_type;
-};
+// struct ImageFormatGL {
+//     u32 format;
+//     u32 internal_format;
+//     u32 component_type;
+// };
 
-ImageFormatGL image_format_to_gl(ImageFormat format);
+// ImageFormatGL image_format_to_gl(ImageFormat format);
 
 VkFormat image_format_to_vk(ImageFormat format);
 

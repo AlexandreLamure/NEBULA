@@ -124,19 +124,18 @@ static void texture_barrier(
     vkCmdPipelineBarrier2(cmd, &dep);
 }
 
-static void create_gpu_image(
-    Texture& tex,
+void Texture::create_gpu_image(
     glm::uvec2 size,
     ImageFormat format,
     TextureType type,
     u32 mip_levels,
     VkImageUsageFlags usage
 ) {
-    tex._size = size;
-    tex._format = format;
-    tex._type = type;
-    tex._mip_levels = mip_levels;
-    tex._layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    _size = size;
+    _format = format;
+    _type = type;
+    _mip_levels = mip_levels;
+    _layout = VK_IMAGE_LAYOUT_UNDEFINED;
 
     const VkFormat vk_format = image_format_to_vk(format);
     const u32 array_layers = type == TextureType::Cube ? 6u : 1u;
@@ -161,21 +160,21 @@ static void create_gpu_image(
         .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
     };
 
-    vk_check(vmaCreateImage(device_allocator(), &image_ci, &alloc_ci, &tex._image, &tex._allocation, nullptr));
+    vk_check(vmaCreateImage(device_allocator(), &image_ci, &alloc_ci, &_image, &_allocation, nullptr));
 
     if(type == TextureType::Cube) {
-        tex._view = create_image_view(tex._image, vk_format, VK_IMAGE_VIEW_TYPE_CUBE, mip_levels, 0, 6, aspect);
+        _view = create_image_view(_image, vk_format, VK_IMAGE_VIEW_TYPE_CUBE, mip_levels, 0, 6, aspect);
         // Compute writes a 2D array (six faces); sampling uses a cube view.
-        tex._storage_view = create_image_view(tex._image, vk_format, VK_IMAGE_VIEW_TYPE_2D_ARRAY, 1, 0, 6, aspect);
+        _storage_view = create_image_view(_image, vk_format, VK_IMAGE_VIEW_TYPE_2D_ARRAY, 1, 0, 6, aspect);
     } else {
-        tex._view = create_image_view(tex._image, vk_format, VK_IMAGE_VIEW_TYPE_2D, mip_levels, 0, 1, aspect);
-        tex._storage_view = VK_NULL_HANDLE;
+        _view = create_image_view(_image, vk_format, VK_IMAGE_VIEW_TYPE_2D, mip_levels, 0, 1, aspect);
+        _storage_view = VK_NULL_HANDLE;
     }
 }
 
-static void upload_pixels(VkCommandBuffer cmd, Texture& tex, const void* pixels, size_t byte_size) {
-    const VkImageAspectFlags aspect = aspect_for_format(tex._format);
-    const u32 layers = tex._type == TextureType::Cube ? 6u : 1u;
+void Texture::upload_pixels(VkCommandBuffer cmd, const void* pixels, size_t byte_size) {
+    const VkImageAspectFlags aspect = aspect_for_format(_format);
+    const u32 layers = _type == TextureType::Cube ? 6u : 1u;
 
     VkBuffer staging_buffer = VK_NULL_HANDLE;
     VmaAllocation staging_allocation = nullptr;
@@ -198,7 +197,7 @@ static void upload_pixels(VkCommandBuffer cmd, Texture& tex, const void* pixels,
 
     texture_barrier(
         cmd,
-        tex._image,
+        _image,
         VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
@@ -220,23 +219,23 @@ static void upload_pixels(VkCommandBuffer cmd, Texture& tex, const void* pixels,
             .baseArrayLayer = 0,
             .layerCount = layers,
         },
-        .imageExtent = {tex._size.x, tex._size.y, 1},
+        .imageExtent = {_size.x, _size.y, 1},
     };
-    vkCmdCopyBufferToImage(cmd, staging_buffer, tex._image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+    vkCmdCopyBufferToImage(cmd, staging_buffer, _image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
 }
 
-static void generate_mipmaps(VkCommandBuffer cmd, Texture& tex) {
-    if(tex._format == ImageFormat::Depth32_FLOAT) {
+void Texture::generate_mipmaps(VkCommandBuffer cmd) {
+    if(_format == ImageFormat::Depth32_FLOAT) {
         return;
     }
 
-    const VkImageAspectFlags aspect = aspect_for_format(tex._format);
-    const u32 layers = tex._type == TextureType::Cube ? 6u : 1u;
+    const VkImageAspectFlags aspect = aspect_for_format(_format);
+    const u32 layers = _type == TextureType::Cube ? 6u : 1u;
 
-    if(tex._mip_levels <= 1) {
+    if(_mip_levels <= 1) {
         texture_barrier(
             cmd,
-            tex._image,
+            _image,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             VK_PIPELINE_STAGE_2_TRANSFER_BIT,
@@ -249,17 +248,17 @@ static void generate_mipmaps(VkCommandBuffer cmd, Texture& tex) {
             0,
             layers
         );
-        tex._layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        _layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         return;
     }
 
-    i32 mip_width = i32(tex._size.x);
-    i32 mip_height = i32(tex._size.y);
+    i32 mip_width = i32(_size.x);
+    i32 mip_height = i32(_size.y);
 
-    for(u32 mip = 1; mip != tex._mip_levels; ++mip) {
+    for(u32 mip = 1; mip != _mip_levels; ++mip) {
         texture_barrier(
             cmd,
-            tex._image,
+            _image,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             VK_PIPELINE_STAGE_2_TRANSFER_BIT,
@@ -300,9 +299,9 @@ static void generate_mipmaps(VkCommandBuffer cmd, Texture& tex) {
         };
         vkCmdBlitImage(
             cmd,
-            tex._image,
+            _image,
             VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            tex._image,
+            _image,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             1,
             &blit,
@@ -315,7 +314,7 @@ static void generate_mipmaps(VkCommandBuffer cmd, Texture& tex) {
 
     texture_barrier(
         cmd,
-        tex._image,
+        _image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         VK_PIPELINE_STAGE_2_TRANSFER_BIT,
@@ -323,7 +322,7 @@ static void generate_mipmaps(VkCommandBuffer cmd, Texture& tex) {
         VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
         VK_ACCESS_2_SHADER_READ_BIT,
         aspect,
-        tex._mip_levels - 1,
+        _mip_levels - 1,
         1,
         0,
         layers
@@ -331,7 +330,7 @@ static void generate_mipmaps(VkCommandBuffer cmd, Texture& tex) {
 
     texture_barrier(
         cmd,
-        tex._image,
+        _image,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         VK_PIPELINE_STAGE_2_TRANSFER_BIT,
@@ -340,22 +339,22 @@ static void generate_mipmaps(VkCommandBuffer cmd, Texture& tex) {
         VK_ACCESS_2_SHADER_READ_BIT,
         aspect,
         0,
-        tex._mip_levels - 1,
+        _mip_levels - 1,
         0,
         layers
     );
 
-    tex._layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    _layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 }
 
-static void finish_sampled_texture(Texture& tex, const void* pixels, size_t byte_size) {
+void Texture::finish_sampled_texture(const void* pixels, size_t byte_size) {
     immediate_submit([&](VkCommandBuffer cmd) {
-        upload_pixels(cmd, tex, pixels, byte_size);
-        generate_mipmaps(cmd, tex);
+        upload_pixels(cmd, pixels, byte_size);
+        generate_mipmaps(cmd);
     });
 
-    if(tex._layout == VK_IMAGE_LAYOUT_UNDEFINED) {
-        tex._layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    if(_layout == VK_IMAGE_LAYOUT_UNDEFINED) {
+        _layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
 }
 
@@ -366,10 +365,10 @@ Texture::Texture(const TextureData& data) :
     _format = data.format;
 
     const u32 mips = mip_levels(_size);
-    create_gpu_image(*this, _size, _format, TextureType::Tex2D, mips, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+    create_gpu_image(_size, _format, TextureType::Tex2D, mips, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 
     const size_t byte_size = _size.x * _size.y * pixel_stride(_format);
-    finish_sampled_texture(*this, data.data.get(), byte_size);
+    finish_sampled_texture(data.data.get(), byte_size);
 }
 
 Texture::Texture(const glm::uvec2 &size, ImageFormat format, WrapMode wrap) :
@@ -384,7 +383,7 @@ Texture::Texture(const glm::uvec2 &size, ImageFormat format, WrapMode wrap) :
         usage |= VK_IMAGE_USAGE_STORAGE_BIT;
     }
 
-    create_gpu_image(*this, size, format, TextureType::Tex2D, 1, usage);
+    create_gpu_image(size, format, TextureType::Tex2D, 1, usage);
 }
 
 Texture Texture::empty_cubemap(u32 size, ImageFormat format, u32 mipmaps) {
@@ -393,8 +392,7 @@ Texture Texture::empty_cubemap(u32 size, ImageFormat format, u32 mipmaps) {
 
     const glm::uvec2 face_size(size);
     const u32 mips = std::min(mipmaps, mip_levels(face_size));
-    create_gpu_image(
-        cube,
+    cube.create_gpu_image(
         face_size,
         format,
         TextureType::Cube,
@@ -477,7 +475,7 @@ Texture Texture::cubemap_from_equirec(const Texture& equirec) {
         }
 
         cube._layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        generate_mipmaps(cmd, cube);
+        cube.generate_mipmaps(cmd);
     });
 
     return cube;

@@ -61,10 +61,10 @@ enum class AccessType {
     ReadWrite
 };
 
-u32 buffer_usage_to_gl(BufferUsage usage);
-u32 access_type_to_gl(AccessType access);
+// u32 buffer_usage_to_gl(BufferUsage usage);
+// u32 access_type_to_gl(AccessType access);
 
-u32 align_up_to(u32 val, u32 up_to);
+// u32 align_up_to(u32 val, u32 up_to);
 
 void init_graphics(GLFWwindow* window);
 void destroy_graphics();

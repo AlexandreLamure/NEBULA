@@ -28,10 +28,10 @@ static void set_y_flipped_viewport(VkCommandBuffer cmd, glm::uvec2 size) {
 }
 
 static void transition_for_color_attachment(VkCommandBuffer cmd, Texture& tex) {
-    const VkImageLayout old_layout = tex._layout;
+    const VkImageLayout old_layout = tex.vk_layout();
     image_barrier(
         cmd,
-        tex._image,
+        tex.vk_image(),
         old_layout,
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         old_layout == VK_IMAGE_LAYOUT_UNDEFINED
@@ -42,14 +42,14 @@ static void transition_for_color_attachment(VkCommandBuffer cmd, Texture& tex) {
         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT
     );
-    tex._layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    tex.set_vk_layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 }
 
 static void transition_for_depth_attachment(VkCommandBuffer cmd, Texture& tex) {
-    const VkImageLayout old_layout = tex._layout;
+    const VkImageLayout old_layout = tex.vk_layout();
     image_barrier(
         cmd,
-        tex._image,
+        tex.vk_image(),
         old_layout,
         VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
         old_layout == VK_IMAGE_LAYOUT_UNDEFINED
@@ -60,7 +60,7 @@ static void transition_for_depth_attachment(VkCommandBuffer cmd, Texture& tex) {
         VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
         VK_IMAGE_ASPECT_DEPTH_BIT
     );
-    tex._layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+    tex.set_vk_layout(VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 }
 
 Framebuffer::Framebuffer() : _swapchain(true) {

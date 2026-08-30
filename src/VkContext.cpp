@@ -505,7 +505,6 @@ static void create_descriptor_pool() {
     };
     const VkDescriptorPoolCreateInfo pool_ci{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .flags = VK_DESCRIPTOR_POOL_CREATE_RESET_DESCRIPTOR_POOL_BIT,
         .maxSets = max_sets_per_frame,
         .poolSizeCount = u32(std::size(pool_sizes)),
         .pPoolSizes = pool_sizes,

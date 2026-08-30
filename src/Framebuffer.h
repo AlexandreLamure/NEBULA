@@ -9,6 +9,7 @@ namespace OM3D {
 
 // Not a VkFramebuffer. Stores the attachments we are currently drawing into;
 // bind() drives vkCmdBeginRendering (Vulkan 1.3 dynamic rendering).
+// TODO: maybe remove that class
 class Framebuffer : NonCopyable {
     public:
         template<size_t N>

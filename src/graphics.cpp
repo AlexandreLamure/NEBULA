@@ -34,92 +34,92 @@ struct {
 
 bool audit_bindings_before_draw = false;
 
-void debug_out(GLenum, GLenum type, GLuint, GLenum sev, GLsizei, const char* msg, const void*) {
-    if(sev == GL_DEBUG_SEVERITY_NOTIFICATION) {
-        return;
-    }
+// void debug_out(GLenum, GLenum type, GLuint, GLenum sev, GLsizei, const char* msg, const void*) {
+//     if(sev == GL_DEBUG_SEVERITY_NOTIFICATION) {
+//         return;
+//     }
 
-    const bool is_error = (type == GL_DEBUG_TYPE_ERROR || type == GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR);
-    (is_error ? std::cerr : std::cout) << (sev == GL_DEBUG_SEVERITY_HIGH ? "[GL][HIGH] " : "[GL] ") << msg << std::endl;
+//     const bool is_error = (type == GL_DEBUG_TYPE_ERROR || type == GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR);
+//     (is_error ? std::cerr : std::cout) << (sev == GL_DEBUG_SEVERITY_HIGH ? "[GL][HIGH] " : "[GL] ") << msg << std::endl;
 
-    if(is_error) {
-        break_in_debugger();
-    }
-}
+//     if(is_error) {
+//         break_in_debugger();
+//     }
+// }
 
-u32 buffer_usage_to_gl(BufferUsage usage) {
-    switch(usage) {
-        case BufferUsage::Attribute:
-            return GL_ARRAY_BUFFER;
+// u32 buffer_usage_to_gl(BufferUsage usage) {
+//     switch(usage) {
+//         case BufferUsage::Attribute:
+//             return GL_ARRAY_BUFFER;
 
-        case BufferUsage::Index:
-            return GL_ELEMENT_ARRAY_BUFFER;
+//         case BufferUsage::Index:
+//             return GL_ELEMENT_ARRAY_BUFFER;
 
-        case BufferUsage::Uniform:
-            return GL_UNIFORM_BUFFER;
+//         case BufferUsage::Uniform:
+//             return GL_UNIFORM_BUFFER;
 
-        case BufferUsage::Storage:
-            return GL_SHADER_STORAGE_BUFFER;
-    }
+//         case BufferUsage::Storage:
+//             return GL_SHADER_STORAGE_BUFFER;
+//     }
 
-    FATAL("Unknown usage value");
-}
+//     FATAL("Unknown usage value");
+// }
 
-u32 access_type_to_gl(AccessType access) {
-    switch(access) {
-        case AccessType::WriteOnly:
-            return GL_WRITE_ONLY;
+// u32 access_type_to_gl(AccessType access) {
+//     switch(access) {
+//         case AccessType::WriteOnly:
+//             return GL_WRITE_ONLY;
 
-        case AccessType::ReadOnly:
-            return GL_READ_ONLY;
+//         case AccessType::ReadOnly:
+//             return GL_READ_ONLY;
 
-        case AccessType::ReadWrite:
-            return GL_READ_WRITE;
-    }
+//         case AccessType::ReadWrite:
+//             return GL_READ_WRITE;
+//     }
 
-    FATAL("Unknown access type value");
-}
+//     FATAL("Unknown access type value");
+// }
 
 
-u32 align_up_to(u32 val, u32 up_to) {
-    if(const u32 diff = val % up_to) {
-        return val + up_to - diff;
-    }
-    return val;
-}
+// u32 align_up_to(u32 val, u32 up_to) {
+//     if(const u32 diff = val % up_to) {
+//         return val + up_to - diff;
+//     }
+//     return val;
+// }
 
 
 
 void init_graphics(GLFWwindow* window) {
     vk_init(window);
 
-    glClearColor(0.5f, 0.7f, 0.8f, 0.0f);
+//     glClearColor(0.5f, 0.7f, 0.8f, 0.0f);
 
-    {
-        glDebugMessageCallback(&debug_out, nullptr);
+//     {
+//         glDebugMessageCallback(&debug_out, nullptr);
 
-        glEnable(GL_DEBUG_OUTPUT);
-#ifdef OS_WIN
-        if(running_in_debugger()) {
-            glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-        }
-#endif
-    }
+//         glEnable(GL_DEBUG_OUTPUT);
+// #ifdef OS_WIN
+//         if(running_in_debugger()) {
+//             glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+//         }
+// #endif
+//     }
 
-    {
-        // Set depth range to [0; 1] instead of the default [-1; 1]
-        glClipControl(GL_LOWER_LEFT, GL_ZERO_TO_ONE);
-        // We use reverse-Z so far is 0
-        glClearDepthf(0.0f);
-    }
+//     {
+//         // Set depth range to [0; 1] instead of the default [-1; 1]
+//         glClipControl(GL_LOWER_LEFT, GL_ZERO_TO_ONE);
+//         // We use reverse-Z so far is 0
+//         glClearDepthf(0.0f);
+//     }
 
-    glActiveTexture(GL_TEXTURE0);
-    glEnable(GL_FRAMEBUFFER_SRGB);
-    glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+//     glActiveTexture(GL_TEXTURE0);
+//     glEnable(GL_FRAMEBUFFER_SRGB);
+//     glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 
-    GLuint global_vao = 0;
-    glGenVertexArrays(1, &global_vao);
-    glBindVertexArray(global_vao);
+//     GLuint global_vao = 0;
+//     glGenVertexArrays(1, &global_vao);
+//     glBindVertexArray(global_vao);
 
     {
         // Split-sum IBL: a 256² RG LUT of the BRDF scale/bias terms. Written once
