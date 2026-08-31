@@ -523,7 +523,7 @@ static void create_descriptor_pool(VkDescriptorPool& pool) {
     const VkDescriptorPoolSize pool_sizes[] = {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, max_sets_per_frame},
         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, max_sets_per_frame},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, max_sets_per_frame * gl_texture_slot_count},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, max_sets_per_frame * texture_slot_count},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, max_sets_per_frame},
     };
     const VkDescriptorPoolCreateInfo pool_ci{
@@ -558,9 +558,9 @@ static VkImageLayout sampled_layout_for_texture(const Texture* texture) {
     return texture->vk_layout();
 }
 
-// PBR fallbacks when a GL texture unit is unbound (white albedo/emissive, flat normal, dielectric-rough).
-static const Texture* default_texture_for_slot(u32 gl_slot) {
-    switch(gl_slot) {
+// PBR fallbacks when a texture slot is unbound (white albedo/emissive, flat normal, dielectric-rough).
+static const Texture* default_texture_for_slot(u32 slot) {
+    switch(slot) {
         case 0:
         case 3:
             return default_white_texture().get();
@@ -573,10 +573,10 @@ static const Texture* default_texture_for_slot(u32 gl_slot) {
     }
 }
 
-static VkDescriptorImageInfo sampled_image_info(u32 gl_slot) {
-    const Texture* texture = g_ctx.bound_textures[gl_slot].texture;
+static VkDescriptorImageInfo sampled_image_info(u32 slot) {
+    const Texture* texture = g_ctx.bound_textures[slot].texture;
     if(!texture) {
-        texture = default_texture_for_slot(gl_slot);
+        texture = default_texture_for_slot(slot);
     }
 
     VkImageView view = g_ctx.fallback_sampled_view;
@@ -637,16 +637,16 @@ void flush_descriptor_bindings() {
         };
     }
 
-    VkDescriptorImageInfo sampled_infos[gl_texture_slot_count] = {};
-    for(u32 gl_slot = 0; gl_slot != gl_texture_slot_count; ++gl_slot) {
-        sampled_infos[gl_slot] = sampled_image_info(gl_slot);
+    VkDescriptorImageInfo sampled_infos[texture_slot_count] = {};
+    for(u32 slot = 0; slot != texture_slot_count; ++slot) {
+        sampled_infos[slot] = sampled_image_info(slot);
         writes[write_count++] = {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = set,
-            .dstBinding = descriptor_texture_binding_base + gl_slot,
+            .dstBinding = descriptor_texture_binding_base + slot,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo = &sampled_infos[gl_slot],
+            .pImageInfo = &sampled_infos[slot],
         };
     }
 

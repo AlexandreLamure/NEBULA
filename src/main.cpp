@@ -409,7 +409,7 @@ int main(int argc, char** argv) {
 
     load_default_scene();
 
-    auto tonemap_program = Program::from_files("tonemap.frag", "screen.vert");
+    auto tonemap_program = Program::from_files("tonemap.slang", "screen.slang");
     RendererState renderer;
 
     for(;;) {
@@ -440,7 +440,7 @@ int main(int argc, char** argv) {
 
         begin_frame();
 
-        // Same frame graph as OpenGL, now recorded into this frame's command buffer:
+        // Frame graph recorded into this frame's command buffer:
         //   HDR + depth  → scene (sun, point lights, IBL, sky)
         //   RGBA8        → ACES tonemap (samples the HDR; exposure is a push constant)
         //   swapchain    → blit + ImGui; end_frame submits and presents

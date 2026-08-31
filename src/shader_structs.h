@@ -12,9 +12,6 @@ namespace OM3D {
 namespace shader {
 
 // CPU copies of the GPU structs in shaders/structs.slang.
-//
-// OpenGL let us #include the GLSL into C++ (`using namespace glm` made vec3/mat4
-// mean glm types). Slang is a different language, so that trick does not parse.
 // Keep the two copies in sync: same field order, same padding.
 //
 // Vulkan uniform buffers use std140-like packing. A float3 is 12 bytes but

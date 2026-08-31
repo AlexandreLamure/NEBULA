@@ -456,7 +456,7 @@ Texture Texture::cubemap_from_equirec(const Texture& equirec) {
 
         equirec.bind(0);
         cube.bind_as_image(1, AccessType::WriteOnly);
-        const std::shared_ptr<Program> equirec_program = Program::from_file("equirec_cube.comp");
+        const std::shared_ptr<Program> equirec_program = Program::from_file("equirec_cube.slang");
         equirec_program->bind();
         dispatch_compute(face_size / 8, face_size / 8, 6);
 
@@ -551,7 +551,7 @@ bool Texture::is_null() const {
 }
 
 void Texture::bind(u32 index) const {
-    if(index < gl_texture_slot_count) {
+    if(index < texture_slot_count) {
         ctx().bound_textures[index].texture = this;
     }
 }

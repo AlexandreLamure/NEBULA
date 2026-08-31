@@ -203,7 +203,7 @@ ImGuiRenderer::ImGuiRenderer(GLFWwindow* window) : _window(window) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
 
-    _material.set_program(Program::from_files("imgui.frag", "imgui.vert"));
+    _material.set_program(Program::from_files("imgui.slang", "imgui.slang"));
     _material.set_depth_test_mode(DepthTestMode::None);
     _material.set_blend_mode(BlendMode::Alpha);
     _material.set_double_sided(true);
@@ -316,7 +316,7 @@ void ImGuiRenderer::render(const ImDrawData* draw_data) {
                 continue;
             }
 
-            // Vulkan scissors are top-left (OpenGL was bottom-left, so it flipped Y).
+            // Vulkan scissors are top-left origin.
             // The Y-flipped viewport does not affect scissor coordinates.
             const i32 min_x = std::max(i32(clip_min.x), 0);
             const i32 min_y = std::max(i32(clip_min.y), 0);

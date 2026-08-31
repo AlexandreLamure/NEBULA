@@ -2,8 +2,8 @@ import structs;
 import utils;
 import lighting;
 
-// Vulkan descriptor slots (Chapter 9). GL texture units 0–3 become bindings 2–5;
-// envmap / BRDF LUT (GL units 4–5) become bindings 6–7.
+// Vulkan descriptor slots. Texture slots 0–3 → bindings 2–5;
+// envmap / BRDF LUT (slots 4–5) → bindings 6–7.
 [[vk::binding(1, 0)]] StructuredBuffer<PointLight> point_lights;
 [[vk::binding(2, 0)]] Sampler2D in_texture;
 [[vk::binding(3, 0)]] Sampler2D in_normal_texture;

@@ -8,7 +8,7 @@
 namespace OM3D {
 
 Scene::Scene() {
-    _sky_material.set_program(Program::from_files("sky.frag", "screen.vert"));
+    _sky_material.set_program(Program::from_files("sky.slang", "screen.slang"));
     _sky_material.set_depth_test_mode(DepthTestMode::None);
 
     _envmap = std::make_shared<Texture>(Texture::empty_cubemap(4, ImageFormat::RGBA8_UNORM));
@@ -57,8 +57,8 @@ void Scene::set_sun(float altitude, float azimuth, glm::vec3 color) {
 
 void Scene::render() const {
     // These TypedBuffers are stack locals destroyed at the end of render().
-    // OpenGL hid GPU lag; Vulkan is often one frame behind, so ~ByteBuffer
-    // enqueues the VkBuffer and the deletion queue frees it after this frame's fence.
+    // GPU work is often one frame behind, so ~ByteBuffer enqueues the VkBuffer
+    // and the deletion queue frees it after this frame's fence.
 
     // Fill and bind frame data buffer (descriptor 0: UBO)
     TypedBuffer<shader::FrameData> buffer(nullptr, 1);
@@ -90,7 +90,7 @@ void Scene::render() const {
     }
     light_buffer.bind(BufferUsage::Storage, 1);
 
-    // GL texture units 4–5 → descriptor bindings 6–7 (see graphics.cpp)
+    // Texture slots 4–5 → descriptor bindings 6–7 (see graphics.cpp)
     DEBUG_ASSERT(_envmap && !_envmap->is_null());
     _envmap->bind(4);
     brdf_lut().bind(5);

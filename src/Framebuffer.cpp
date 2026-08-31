@@ -84,12 +84,12 @@ Framebuffer::Framebuffer(Texture* depth, Texture** colors, size_t count) : _dept
     _color_count = u32(count);
 }
 
-// FIXME: This is a OpenGL-style framebuffer bind.
-// I guess for Vulkan + dynamic rendering we should use a "pass" architecture with vkBeginRendering/vkEndRendering enclosure and proper descriptor sets.
+// FIXME: sticky framebuffer bind. Prefer an explicit pass that encloses
+// vkCmdBeginRendering / vkCmdEndRendering with proper descriptor sets.
 void Framebuffer::bind(bool clear_depth, bool clear_color) const {
     ALWAYS_ASSERT(ctx().frame_active, "Framebuffer::bind requires an active frame");
 
-    // Only one vkCmdBeginRendering at a time (same idea as one bound FBO).
+    // Only one vkCmdBeginRendering at a time.
     end_rendering_if_active();
 
     const VkCommandBuffer cmd = vk_command_buffer();

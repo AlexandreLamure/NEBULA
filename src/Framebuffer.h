@@ -17,7 +17,7 @@ class Framebuffer : NonCopyable {
         }
 
 
-        // Default framebuffer = current swapchain image (GL FBO 0).
+        // Default framebuffer = current swapchain image.
         Framebuffer();
         Framebuffer(Texture* depth);
 

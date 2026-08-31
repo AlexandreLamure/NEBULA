@@ -22,8 +22,8 @@ class Texture;
 
 static constexpr u32 frames_in_flight = 2;
 static constexpr u32 descriptor_binding_count = 9;
-// OpenGL texture units 0-5 map to descriptor bindings 2-7 (see graphics.cpp).
-static constexpr u32 gl_texture_slot_count = 6;
+// Texture slots 0-5 map to descriptor bindings 2-7 (see graphics.cpp).
+static constexpr u32 texture_slot_count = 6;
 static constexpr u32 descriptor_texture_binding_base = 2;
 // Two timestamps per PROFILE_GPU zone (begin + end).
 static constexpr u32 timestamp_queries_per_frame = 1024;
@@ -117,7 +117,7 @@ struct GraphicsContext {
     BoundBuffer bound_vertex;
     BoundBuffer bound_index;
     BoundBuffer bound_descriptors[descriptor_binding_count] = {};
-    BoundSampledTexture bound_textures[gl_texture_slot_count] = {};
+    BoundSampledTexture bound_textures[texture_slot_count] = {};
     BoundStorageImage bound_storage_image;
     // Raster state written by Material::bind(), applied after vkCmdBindPipeline
     // (blend is baked into the pipeline; depth/cull are Vulkan 1.3 dynamic state).

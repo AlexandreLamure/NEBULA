@@ -28,7 +28,7 @@ public struct PointLight {
     public float padding;
 };
 
-// Replaces every former GLSL `uniform` (model matrix, material factors, exposure, ...).
+// Push constants for per-draw data (model matrix, material factors, exposure, ...).
 // Offsets must match OM3D::PushConstants in Program.h.
 public struct PushConstants {
     public float4x4 model;

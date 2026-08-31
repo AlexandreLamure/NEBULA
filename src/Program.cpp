@@ -121,7 +121,7 @@ static VkPipeline create_graphics_pipeline(VkShaderModule vert, VkShaderModule f
         },
     };
 
-    // Vertex layout is pipeline state, not per-draw like glVertexAttribPointer.
+    // Vertex layout is pipeline state, not rebound per draw.
     // Mesh: Vertex.h locations 0–4. ImGui: ImDrawVert. None: SV_VertexID, no buffer.
     VkVertexInputBindingDescription binding{
         .binding = 0,

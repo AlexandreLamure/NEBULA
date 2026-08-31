@@ -19,15 +19,6 @@ enum class ImageFormat {
     Depth32_FLOAT
 };
 
-
-// struct ImageFormatGL {
-//     u32 format;
-//     u32 internal_format;
-//     u32 component_type;
-// };
-
-// ImageFormatGL image_format_to_gl(ImageFormat format);
-
 VkFormat image_format_to_vk(ImageFormat format);
 
 }

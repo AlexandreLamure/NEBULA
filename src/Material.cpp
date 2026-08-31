@@ -100,7 +100,7 @@ Material Material::textured_pbr_material(bool alpha_test) {
         defines.emplace_back("ALPHA_TEST");
     }
 
-    material._program = Program::from_files("lit.frag", "basic.vert", defines);
+    material._program = Program::from_files("lit.slang", "basic.slang", defines);
 
     material.set_texture(0u, default_white_texture());
     material.set_texture(1u, default_normal_texture());
