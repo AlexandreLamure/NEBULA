@@ -142,68 +142,69 @@ void Framebuffer::bind(bool clear_depth, bool clear_color) const {
 
         vkCmdBeginRendering(cmd, &rendering);
         set_y_flipped_viewport(cmd, extent);
+    }
+    else {
+        VkRenderingAttachmentInfo color_infos[8] = {};
+        for(u32 i = 0; i != _color_count; ++i) {
+            Texture* color = _colors[i];
+            DEBUG_ASSERT(color && color->_view);
+            transition_for_color_attachment(cmd, *color);
+
+            color_infos[i] = {
+                .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+                .imageView = color->_view,
+                .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .loadOp = clear_color ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .clearValue = {.color = {{clear_color_value.r, clear_color_value.g, clear_color_value.b, clear_color_value.a}}},
+            };
+        }
+
+        VkRenderingAttachmentInfo depth_info{};
+        const VkRenderingAttachmentInfo* depth_ptr = nullptr;
+        if(_depth) {
+            DEBUG_ASSERT(_depth->_view);
+            transition_for_depth_attachment(cmd, *_depth);
+
+            depth_info = {
+                .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+                .imageView = _depth->_view,
+                .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                .loadOp = clear_depth ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                // Reverse-Z: far is 0 (same as the old glClearDepthf(0)).
+                .clearValue = {.depthStencil = {.depth = 0.0f}},
+            };
+            depth_ptr = &depth_info;
+        }
+
+        const VkExtent2D extent = {_size.x, _size.y};
+        const VkRenderingInfo rendering{
+            .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+            .renderArea = {.extent = extent},
+            .layerCount = 1,
+            .colorAttachmentCount = _color_count,
+            .pColorAttachments = _color_count ? color_infos : nullptr,
+            .pDepthAttachment = depth_ptr,
+        };
+
+        c.rendering_color_format = _color_count
+            ? image_format_to_vk(_colors[0]->_format)
+            : VK_FORMAT_UNDEFINED;
+        c.rendering_depth_format = _depth
+            ? image_format_to_vk(_depth->_format)
+            : VK_FORMAT_UNDEFINED;
+        c.rendering_to_swapchain = false;
+        c.rendering_color_count = _color_count;
+        for(u32 i = 0; i != _color_count; ++i) {
+            c.rendering_colors[i] = _colors[i];
+        }
+
+        vkCmdBeginRendering(cmd, &rendering);
+        set_y_flipped_viewport(cmd, _size);
         c.rendering_active = true;
-        return;
     }
 
-    VkRenderingAttachmentInfo color_infos[8] = {};
-    for(u32 i = 0; i != _color_count; ++i) {
-        Texture* color = _colors[i];
-        DEBUG_ASSERT(color && color->_view);
-        transition_for_color_attachment(cmd, *color);
-
-        color_infos[i] = {
-            .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .imageView = color->_view,
-            .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .loadOp = clear_color ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
-            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-            .clearValue = {.color = {{clear_color_value.r, clear_color_value.g, clear_color_value.b, clear_color_value.a}}},
-        };
-    }
-
-    VkRenderingAttachmentInfo depth_info{};
-    const VkRenderingAttachmentInfo* depth_ptr = nullptr;
-    if(_depth) {
-        DEBUG_ASSERT(_depth->_view);
-        transition_for_depth_attachment(cmd, *_depth);
-
-        depth_info = {
-            .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .imageView = _depth->_view,
-            .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-            .loadOp = clear_depth ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
-            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-            // Reverse-Z: far is 0 (same as the old glClearDepthf(0)).
-            .clearValue = {.depthStencil = {.depth = 0.0f}},
-        };
-        depth_ptr = &depth_info;
-    }
-
-    const VkExtent2D extent = {_size.x, _size.y};
-    const VkRenderingInfo rendering{
-        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-        .renderArea = {.extent = extent},
-        .layerCount = 1,
-        .colorAttachmentCount = _color_count,
-        .pColorAttachments = _color_count ? color_infos : nullptr,
-        .pDepthAttachment = depth_ptr,
-    };
-
-    c.rendering_color_format = _color_count
-        ? image_format_to_vk(_colors[0]->_format)
-        : VK_FORMAT_UNDEFINED;
-    c.rendering_depth_format = _depth
-        ? image_format_to_vk(_depth->_format)
-        : VK_FORMAT_UNDEFINED;
-    c.rendering_to_swapchain = false;
-    c.rendering_color_count = _color_count;
-    for(u32 i = 0; i != _color_count; ++i) {
-        c.rendering_colors[i] = _colors[i];
-    }
-
-    vkCmdBeginRendering(cmd, &rendering);
-    set_y_flipped_viewport(cmd, _size);
     c.rendering_active = true;
 }
 
