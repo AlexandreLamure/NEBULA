@@ -1,2 +1,8 @@
 /build/
 *.user
+launch.json
+
+/data/*
+!/data/DamagedHelmet.glb
+!/data/IndoorEnvironment.jpg
+!/data/pretoria_gardens.jpg
