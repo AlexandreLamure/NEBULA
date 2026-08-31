@@ -34,6 +34,7 @@ static std::string module_name_from_file(const std::string& file) {
     return name;
 }
 
+// Maps HASH("uniform_name") onto a byte offset in the PushConstants blob (Vulkan has no named uniforms).
 static int uniform_offset(u32 hash) {
     switch(hash) {
         case str_hash("model"): return int(offsetof(PushConstants, model));
@@ -96,6 +97,7 @@ static VkShaderModule create_shader_module(const std::vector<u32>& spirv) {
 }
 
 // TODO: make this a bit more implicit
+// Packs blend, vertex layout, and attachment formats into a u32 used to cache pipeline variants.
 static u32 current_pipeline_key() {
     return u32(ctx().alpha_blend)
          | (u32(ctx().vertex_input) << 1)
@@ -409,6 +411,7 @@ std::shared_ptr<Program> Program::from_files(const std::string& frag, const std:
     return program;
 }
 
+// Memcpys the value into the push-constant struct at the hashed field's offset.
 void Program::write_uniform(u32 name_hash, const void* data, u32 size) {
     const int off = uniform_offset(name_hash);
     if(off < 0) {

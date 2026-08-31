@@ -18,6 +18,7 @@ struct VSOutput {
     [[vk::location(5)]] float3 bitangent : BITANGENT;
 };
 
+// Reconstructs world TBN; bitangent handedness is stored in tangent.w (glTF convention).
 [shader("vertex")]
 VSOutput vertex_main(VSInput input) {
     VSOutput output;

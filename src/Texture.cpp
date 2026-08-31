@@ -205,6 +205,7 @@ void Texture::upload_pixels(VkCommandBuffer cmd, VkBuffer staging_buffer, size_t
     vkCmdCopyBufferToImage(cmd, staging_buffer, _image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
 }
 
+// Blits each mip from the previous one, toggling TRANSFER_SRC/DST layouts as it goes.
 void Texture::generate_mipmaps(VkCommandBuffer cmd) {
     if(_format == ImageFormat::Depth32_FLOAT) {
         return;
@@ -420,6 +421,7 @@ Texture Texture::empty_cubemap(u32 size, ImageFormat format, u32 mipmaps) {
     return cube;
 }
 
+// Renders each cubemap face from the lat-long map via compute, then generates mips for IBL.
 Texture Texture::cubemap_from_equirec(const Texture& equirec) {
     const size_t px = equirec.size().x * equirec.size().y;
     const size_t per_face = px / 6;
@@ -554,6 +556,7 @@ void Texture::bind(u32 index) const {
     }
 }
 
+// GL imageLoad/Store emulator: the slot is ignored because storage is always descriptor binding 8.
 void Texture::bind_as_image(u32 index, AccessType) {
     (void)index;
     _layout = VK_IMAGE_LAYOUT_GENERAL;

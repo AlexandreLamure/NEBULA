@@ -3,25 +3,30 @@
 namespace OM3D {
 
 
+// Reverse-Z infinite perspective stores 0 in m[3][3]; an orthographic matrix stores 1.
 static bool is_proj_orthographic(const glm::mat4& proj) {
     return proj[3][3] == 1.0f;
 }
 
+// Aspect ratio is |m[1][1] / m[0][0]| for this projection layout.
 static float extract_ratio(const glm::mat4& proj) {
     const float f = proj[1][1];
     return std::abs(1.0f / (proj[0][0] / f));
 }
 
+// Near plane lives in m[3][2] of the reverse-Z infinite projection.
 static float extract_near(const glm::mat4& proj) {
     return proj[3][2];
 }
 
+// Vertical FOV is 2*atan(1/m[1][1]), recovered from the perspective scale.
 static float extract_fov(const glm::mat4& proj) {
     ALWAYS_ASSERT(!is_proj_orthographic(proj), "Orthographic camera doesn't have a FoV");
     const float f = proj[1][1];
     return 2.0f * std::atan(1.0f / f);
 }
 
+// Camera world position is -R^T * t, recovered from the view matrix rotation and translation.
 static glm::vec3 extract_position(const glm::mat4& view) {
     glm::vec3 pos = {};
     for(u32 i = 0; i != 3; ++i) {
@@ -30,6 +35,7 @@ static glm::vec3 extract_position(const glm::mat4& view) {
     return pos;
 }
 
+// View-space -Z is the third row of the lookAt rotation; negate it to get world forward.
 static glm::vec3 extract_forward(const glm::mat4& view) {
     return -glm::normalize(glm::vec3(view[0][2], view[1][2], view[2][2]));
 }
@@ -46,6 +52,7 @@ static glm::vec3 extract_up(const glm::mat4& view) {
 
 
 
+// Reverse-Z infinite-far projection: near maps to 1 and far to 0 so depth precision clusters at the camera.
 glm::mat4 Camera::perspective(float fov_y, float ratio, float z_near) {
     float f = 1.0f / std::tan(fov_y / 2.0f);
     return glm::mat4(f / ratio, 0.0f,  0.0f,  0.0f,
@@ -54,6 +61,7 @@ glm::mat4 Camera::perspective(float fov_y, float ratio, float z_near) {
                   0.0f, 0.0f, z_near,  0.0f);
 }
 
+// glm::orthoZO gives 0–1 depth; the extra matrix flips Z so far is 0 (reverse-Z).
 glm::mat4 Camera::orthographic(float left, float right, float bottom, float top, float z_near, float z_far) {
     glm::mat4 reverse_z = glm::mat4(1.0f);
     reverse_z[2][2] = -1.0f;
@@ -129,6 +137,7 @@ void Camera::update() {
     _view_proj = _projection * _view;
 }
 
+// Inward-facing plane normals from camera axes, tilted by half-FOV (and its aspect-corrected sibling).
 Frustum Camera::build_frustum() const {
     const glm::vec3 camera_forward = forward();
     const glm::vec3 camera_up = up();

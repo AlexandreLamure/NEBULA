@@ -2,6 +2,7 @@ module lighting;
 
 import utils;
 
+// Trowbridge-Reitz (GGX) normal distribution: how much of the microfacet lobe aligns with H.
 public float d_ggx(float3 N, float3 H, float roughness) {
     const float a = roughness * roughness;
     const float a2 = a * a;
@@ -12,10 +13,12 @@ public float d_ggx(float3 N, float3 H, float roughness) {
     return a2 / (PI * denom * denom);
 }
 
+// Schlick G1 given a precomputed remapping k (see g_smith for how k is chosen).
 public float g_schlick_ggx(float NdotV, float k) {
     return NdotV / (NdotV * (1.0 - k) + k);
 }
 
+// Height-correlated Smith G with Disney's remapped k = (r+1)²/8 for analytic (punctual) lights.
 public float g_smith(float3 N, float3 V, float3 L, float roughness) {
     const float r = (roughness + 1.0);
     const float k = (r * r) / 8.0;
@@ -24,14 +27,17 @@ public float g_smith(float3 N, float3 V, float3 L, float roughness) {
     return ggx1 * ggx2;
 }
 
+// Schlick Fresnel: reflectance rises from F0 to 1 as the view grazes the surface.
 public float3 f_schlick(float cos_theta, float3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
 }
 
+// Schlick Fresnel whose grazing color is dimmed by roughness so IBL spec doesn't over-brighten.
 public float3 f_schlick_roughness(float cos_theta, float3 F0, float roughness) {
     return F0 + (max(float3(1.0 - roughness, 1.0 - roughness, 1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
 }
 
+// Cook-Torrance metalness BRDF: D*G*F specular plus Lambert diffuse, then scaled by NdotL.
 public float3 eval_brdf(float3 N, float3 V, float3 L, float3 albedo, float metallic, float roughness) {
     const float NdotL = dot(N, L);
 
@@ -56,10 +62,12 @@ public float3 eval_brdf(float3 N, float3 V, float3 L, float3 albedo, float metal
     return (diffuse * kD + specular * kS) * NdotL;
 }
 
+// Maps roughness to a prefiltered-env mip with a 0.25 gamma so glossy values use more levels.
 public float roughness_to_mip(float r, uint mips) {
     return pow(r, 0.25) * (mips - 1);
 }
 
+// Split-sum IBL: irradiance from the last mip, prefiltered spec from roughness, scaled by the BRDF LUT.
 public float3 eval_ibl(SamplerCube envmap, Sampler2D brdf_lut, float3 N, float3 V, float3 albedo, float metallic, float roughness) {
     const float NdotV = max(dot(N, V), 0.0);
 

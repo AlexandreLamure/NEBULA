@@ -3,6 +3,7 @@ import utils;
 
 [[vk::binding(2, 0)]] Sampler2D in_hdr;
 
+// Narkowicz's fitted ACES filmic curve, compressing HDR into [0,1].
 float3 aces(float3 x) {
     const float a = 2.51;
     const float b = 0.03;

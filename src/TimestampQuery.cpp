@@ -44,6 +44,7 @@ namespace profile {
         return index;
     }
 
+    // contained_zones is how many markers nested inside this one, used to draw a tree in the profiler UI.
     void end_profile_zone(u32 zone_id) {
         Marker& marker = current_frame[zone_id];
         marker.cpu_time = program_time() - marker.cpu_time;
@@ -55,6 +56,7 @@ namespace profile {
 
 
 
+// GPU timestamps lag the CPU, so frames sit in a queue until the oldest one's queries are ready.
 void process_profile_markers() {
     profile::queued_frames.emplace_back().swap(profile::current_frame);
     DEBUG_ASSERT(profile::current_frame.empty());
@@ -133,6 +135,7 @@ void reset_timestamp_queries() {
     c.timestamp_allocated[slot] = 0;
 }
 
+// Some queues report fewer than 64 valid timestamp bits; wrap arithmetic must mask to that width.
 static u64 timestamp_mask() {
     const u32 bits = ctx().timestamp_valid_bits;
     if(bits == 0 || bits >= 64) {
@@ -141,6 +144,7 @@ static u64 timestamp_mask() {
     return (u64(1) << bits) - 1;
 }
 
+// Wrap-safe tick delta times timestampPeriod (nanoseconds) to seconds.
 static double ticks_to_seconds(u64 begin_ticks, u64 end_ticks) {
     const u64 delta = (end_ticks - begin_ticks) & timestamp_mask();
     return double(delta) * double(ctx().timestamp_period) * 1e-9;

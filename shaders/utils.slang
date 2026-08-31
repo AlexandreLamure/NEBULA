@@ -23,10 +23,12 @@ public float4 saturate(float4 x) {
     return min(float4(1.0, 1.0, 1.0, 1.0), max(float4(0.0, 0.0, 0.0, 0.0), x));
 }
 
+// Rec.709 luma weights (linear RGB → perceived brightness).
 public float luminance(float3 rgb) {
     return dot(rgb, float3(0.2126, 0.7152, 0.0722));
 }
 
+// Unreal-style windowed inverse-square: (1-(d/r)^4)^2 / (d^2+1), zero past radius.
 public float attenuation(float distance, float radius) {
     const float x = min(distance, radius);
     return sqr(1.0 - sqr(sqr(x / radius))) / (sqr(x) + 1.0);
@@ -58,25 +60,30 @@ public float3 linear_to_sRGB(float3 v) {
     return float3(linear_to_sRGB(v.r), linear_to_sRGB(v.g), linear_to_sRGB(v.b));
 }
 
+// Maps two-channel [0,1] XY to tangent-space [-1,1] and reconstructs Z as 1 - length(xy).
 public float3 unpack_normal_map(float2 normal) {
     normal = normal * 2.0 - float2(1.0, 1.0);
     return float3(normal, 1.0 - sqrt(dot(normal, normal)));
 }
 
+// Maps a unit direction to lat-long UV (atan2/asin scaled by 1/2π and 1/π).
 public float2 to_equirec(float3 v) {
     return -float2(atan2(-v.y, v.x), asin(v.z)) * float2(0.1591, 0.3183) + 0.5;
 }
 
+// Homogeneous divide after multiplying NDC by the inverse view-projection.
 public float3 unproject_ndc(float3 ndc, float4x4 inv_matrix) {
     const float4 p = mul(inv_matrix, float4(ndc, 1.0));
     return p.xyz / p.w;
 }
 
+// Builds NDC from UV and depth then unprojects to world (depth 1 is near under reverse-Z).
 public float3 unproject(float2 uv, float depth, float4x4 inv_matrix) {
     const float3 ndc = float3(uv * 2.0 - 1.0, depth);
     return unproject_ndc(ndc, inv_matrix);
 }
 
+// 2D low-discrepancy sample: i/N plus the van der Corput radical inverse (bit-reversed i / 2^32).
 public float2 hammersley(uint i, uint N) {
     uint bits = (i << 16u) | (i >> 16u);
     bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
@@ -86,6 +93,7 @@ public float2 hammersley(uint i, uint N) {
     return float2(float(i) / float(N), float(bits) * 2.3283064365386963e-10);
 }
 
+// Samples a GGX half-vector from Xi, then rotates it from tangent space into the world around N.
 public float3 importance_sample_ggx(float2 Xi, float3 N, float roughness) {
     float a = roughness * roughness;
 
@@ -100,6 +108,7 @@ public float3 importance_sample_ggx(float2 Xi, float3 N, float roughness) {
     return normalize(tangent * H.x + bitangent * H.y + N * H.z);
 }
 
+// Smith-Schlick G1 with IBL k = a²/2 (Karis), used when integrating the BRDF LUT.
 public float geometry_schlick_ggx(float NdotV, float roughness) {
     const float k = (roughness * roughness) / 2.0;
     const float denom = NdotV * (1.0 - k) + k;

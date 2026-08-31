@@ -38,6 +38,7 @@ static size_t component_count(int type) {
     }
 }
 
+// Copies a glTF accessor (stride, offset, optional normalize) into one Vertex field.
 static bool decode_attrib_buffer(const tinygltf::Model& gltf, const std::string& name, const tinygltf::Accessor& accessor, Span<Vertex> vertices) {
     const tinygltf::BufferView& buffer = gltf.bufferViews[accessor.bufferView];
 
@@ -120,6 +121,7 @@ static bool decode_attrib_buffer(const tinygltf::Model& gltf, const std::string&
     return true;
 }
 
+// Widens glTF 8/16/32-bit indices (with optional byteStride) into a tightly packed u32 buffer.
 static bool decode_index_buffer(const tinygltf::Model& gltf, const tinygltf::Accessor& accessor, Span<u32> indices) {
     const tinygltf::BufferView& buffer = gltf.bufferViews[accessor.bufferView];
 
@@ -228,6 +230,7 @@ static Result<TextureData> build_texture_data(const tinygltf::Image& image, bool
 }
 
 
+// Builds T * R * S from glTF TRS; rotation is stored xyzw and converted to glm's wxyz quaternion.
 static glm::mat4 parse_node_matrix(const tinygltf::Node& node) {
     glm::vec3 translation(0.0f, 0.0f, 0.0f);
     for(u32 k = 0; k != node.translation.size(); ++k) {
@@ -261,6 +264,7 @@ static void parse_node_transforms(int node_index, const tinygltf::Model& gltf, s
     }
 }
 
+// Accumulates a per-vertex tangent from each triangle's position/UV deltas (Lengyel), then normalizes and sets bitangent sign to +1.
 static void compute_tangents(MeshData& mesh) {
     for(Vertex& vert : mesh.vertices) {
         vert.tangent_bitangent_sign = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);

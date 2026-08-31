@@ -550,6 +550,7 @@ static VkSampler sampler_for_texture(const Texture* texture) {
     return texture->wrap_mode() == WrapMode::Clamp ? g_ctx.sampler_clamp : g_ctx.sampler_repeat;
 }
 
+// If the texture was never transitioned, report SHADER_READ_ONLY so the descriptor write stays valid.
 static VkImageLayout sampled_layout_for_texture(const Texture* texture) {
     if(!texture || texture->vk_layout() == VK_IMAGE_LAYOUT_UNDEFINED) {
         return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -557,6 +558,7 @@ static VkImageLayout sampled_layout_for_texture(const Texture* texture) {
     return texture->vk_layout();
 }
 
+// PBR fallbacks when a GL texture unit is unbound (white albedo/emissive, flat normal, dielectric-rough).
 static const Texture* default_texture_for_slot(u32 gl_slot) {
     switch(gl_slot) {
         case 0:
@@ -589,6 +591,7 @@ static VkDescriptorImageInfo sampled_image_info(u32 gl_slot) {
     };
 }
 
+// Builds one descriptor set from the sticky bound_* state, matching OpenGL's bind-then-draw model.
 void flush_descriptor_bindings() {
     VkDescriptorPool pool = VK_NULL_HANDLE;
     if(g_ctx.immediate_cmd) {

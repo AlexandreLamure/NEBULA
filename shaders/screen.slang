@@ -3,6 +3,7 @@ struct VSOutput {
     [[vk::location(0)]] float2 uv : UV;
 };
 
+// One oversized triangle from SV_VertexID whose UVs cover [0,1]² of the screen.
 [shader("vertex")]
 VSOutput vertex_main(uint vid : SV_VertexID) {
     float2 uvs[3] = {

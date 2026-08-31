@@ -27,6 +27,7 @@ static AllocatedBuffer create_buffer(VkDeviceSize size, VkBufferUsageFlags usage
     return out;
 }
 
+// HOST_VISIBLE memory still needs an explicit flush unless it is also HOST_COHERENT.
 static bool allocation_needs_flush(VmaAllocation allocation) {
     VkMemoryPropertyFlags mem_flags = 0;
     vmaGetAllocationMemoryProperties(device_allocator(), allocation, &mem_flags);

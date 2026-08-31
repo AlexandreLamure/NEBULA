@@ -3,6 +3,7 @@ import utils;
 [[vk::binding(8, 0)]]
 RWTexture2D<float2> out_image;
 
+// Monte-Carlo estimate of the split-sum scale (A) and bias (B) terms for a given NdotV and roughness.
 float2 integrate_brdf(float NdotV, float roughness) {
     float A = 0.0;
     float B = 0.0;
