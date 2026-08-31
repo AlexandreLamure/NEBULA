@@ -152,11 +152,11 @@ struct GraphicsContext {
     bool rendering_active = false;
     bool rendering_to_swapchain = false;
     // Offscreen color attachments of the current vkCmdBeginRendering. After
-    // vkCmdEndRendering they become SHADER_READ_ONLY so the next pass can sample
-    // them (GL: unbind the FBO, then bind its texture). Swapchain is not a Texture.
+    // the RenderPass ends they become SHADER_READ_ONLY so the next pass can
+    // sample them. Swapchain is not a Texture.
     Texture* rendering_colors[8] = {};
     u32 rendering_color_count = 0;
-    // Per-frame: UNDEFINED until Framebuffer binds the swapchain; PRESENT after end_frame.
+    // Per-frame: UNDEFINED until a swapchain RenderPass begins; PRESENT after end_frame.
     VkImageLayout swapchain_layout = VK_IMAGE_LAYOUT_UNDEFINED;
 };
 GraphicsContext& ctx();

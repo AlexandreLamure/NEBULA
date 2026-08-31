@@ -1,7 +1,7 @@
 #include "VkContext.h"
 #include "graphics.h"
 
-#include "Framebuffer.h"
+#include "RenderPass.h"
 #include "Texture.h"
 #include "TimestampQuery.h"
 #include "Program.h"
@@ -144,12 +144,11 @@ void draw_full_screen_triangle() {
 }
 
 void blit_to_screen(const Texture& tex) {
+    // Expects to be called inside an active swapchain RenderPass.
+    ALWAYS_ASSERT(ctx().rendering_active && ctx().rendering_to_swapchain,
+                  "blit_to_screen requires an active swapchain RenderPass");
+
     const std::shared_ptr<Program> blit_program = Program::from_files("passthrough.slang", "screen.slang");
-
-    // Default Framebuffer = current swapchain view. Left open so ImGui can draw
-    // into the same rendering with loadOp LOAD on a later bind; end_frame closes it.
-    Framebuffer().bind(false, false);
-
     blit_program->bind();
     tex.bind(0);
     draw_full_screen_triangle();
@@ -177,7 +176,7 @@ std::shared_ptr<Texture> default_metal_rough_texture() {
 
 void audit_bindings() {
     ALWAYS_ASSERT(ctx().bound_program, "No pipeline bound (call Program::bind before drawing)");
-    ALWAYS_ASSERT(ctx().rendering_active, "No active rendering pass (call Framebuffer::bind first)");
+    ALWAYS_ASSERT(ctx().rendering_active, "No active rendering pass (create a RenderPass first)");
 
     if(ctx().vertex_input == VertexLayout::Mesh) {
         ALWAYS_ASSERT(ctx().bound_vertex.buffer, "No vertex buffer bound");

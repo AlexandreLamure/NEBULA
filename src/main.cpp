@@ -7,7 +7,7 @@
 #include <VkContext.h>
 #include <Scene.h>
 #include <Texture.h>
-#include <Framebuffer.h>
+#include <RenderPass.h>
 #include <TimestampQuery.h>
 #include <ImGuiRenderer.h>
 
@@ -185,8 +185,6 @@ void gui(ImGuiRenderer& imgui) {
 
     static bool open_gpu_profiler = false;
 
-    PROFILE_GPU("GUI");
-
     imgui.start();
     DEFER(imgui.finish());
 
@@ -362,7 +360,6 @@ void load_default_scene() {
     }
 }
 
-// TODO: maybe remove that class
 struct RendererState {
     void resize(glm::uvec2 size) {
         this->size = size;
@@ -370,8 +367,6 @@ struct RendererState {
             depth_texture = Texture(size, ImageFormat::Depth32_FLOAT, WrapMode::Clamp);
             lit_hdr_texture = Texture(size, ImageFormat::RGBA16_FLOAT, WrapMode::Clamp);
             tone_mapped_texture = Texture(size, ImageFormat::RGBA8_UNORM, WrapMode::Clamp);
-            main_framebuffer = Framebuffer(&depth_texture, std::array{&lit_hdr_texture});
-            tone_map_framebuffer = Framebuffer(nullptr, std::array{&tone_mapped_texture});
         }
     }
 
@@ -380,9 +375,6 @@ struct RendererState {
     Texture depth_texture;
     Texture lit_hdr_texture;
     Texture tone_mapped_texture;
-
-    Framebuffer main_framebuffer;
-    Framebuffer tone_map_framebuffer;
 };
 
 
@@ -443,40 +435,33 @@ int main(int argc, char** argv) {
         // Frame graph recorded into this frame's command buffer:
         //   HDR + depth  → scene (sun, point lights, IBL, sky)
         //   RGBA8        → ACES tonemap (samples the HDR; exposure is a push constant)
-        //   swapchain    → blit + ImGui; end_frame submits and presents
-        // Switching Framebuffer::bind ends the previous rendering and makes its
-        // color attachments sampleable (COLOR_ATTACHMENT → SHADER_READ_ONLY).
+        //   swapchain    → blit, then GUI (second pass LOADs the blit result)
+        // Ending a RenderPass transitions its offscreen colors to SHADER_READ_ONLY
+        // so the next pass can sample them.
         {
             PROFILE_GPU("Frame");
 
             // Render the scene
-            {
-                PROFILE_GPU("Main pass");
-
-                renderer.main_framebuffer.bind(true, true);
+            RenderPass(&renderer.depth_texture, std::array{&renderer.lit_hdr_texture}, true, true, "Main pass", [&] {
                 scene->render();
-            }
+            });
 
             // Apply a tonemap as a full screen pass
-            {
-                PROFILE_GPU("Tonemap");
-
-                renderer.tone_map_framebuffer.bind(false, true);
+            RenderPass(nullptr, std::array{&renderer.tone_mapped_texture}, false, true, "Tonemap", [&] {
                 ctx().vertex_input = VertexLayout::None;
                 tonemap_program->bind();
                 tonemap_program->set_uniform(HASH("exposure"), exposure);
                 renderer.lit_hdr_texture.bind(0);
                 draw_full_screen_triangle();
-            }
+            });
 
-            // Blit tonemap result to screen
-            {
-                PROFILE_GPU("Blit");
+            RenderPass(RenderPass::Swapchain{}, false, "Blit", [&] {
                 blit_to_screen(renderer.tone_mapped_texture);
-            }
+            });
 
-            // Draw GUI on top
-            gui(*imgui);
+            RenderPass(RenderPass::Swapchain{}, false, "GUI", [&] {
+                gui(*imgui);
+            });
         }
 
         end_frame();

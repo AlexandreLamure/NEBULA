@@ -73,7 +73,6 @@ class Texture {
         bool is_cube() const;
 
     private:
-        friend class Framebuffer;
         friend class Program;
 
         void swap(Texture& other);
@@ -84,7 +83,7 @@ class Texture {
         void generate_mipmaps(VkCommandBuffer cmd);
         void finish_sampled_texture(const void* pixels, size_t byte_size);
 
-        // Chapter 10 owns creation; Framebuffer (Chapter 8) only needs view + tracked layout.
+        // Image + view + tracked layout for sampling and dynamic rendering.
         VkImage _image = VK_NULL_HANDLE;
         VmaAllocation _allocation = nullptr;
         VkImageView _view = VK_NULL_HANDLE;
