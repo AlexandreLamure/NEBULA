@@ -49,8 +49,8 @@ class Program : NonCopyable {
         Program(Program&& other);
         Program& operator=(Program&& other);
 
-        Program(const std::string& frag, const std::string& vert, Span<const std::string> defines = {});
-        Program(const std::string& comp, Span<const std::string> defines = {});
+        Program(const std::string& vert, const std::string& frag);
+        Program(const std::string& comp);
         ~Program();
 
         void bind() const;
@@ -58,8 +58,8 @@ class Program : NonCopyable {
 
         bool is_compute() const;
 
-        static std::shared_ptr<Program> from_file(const std::string& comp, Span<const std::string> defines = {});
-        static std::shared_ptr<Program> from_files(const std::string& frag, const std::string& vert, Span<const std::string> defines = {});
+        static std::shared_ptr<Program> from_file(const std::string& comp);
+        static std::shared_ptr<Program> from_files(const std::string& vert, const std::string& frag);
 
         void set_uniform(u32 name_hash, const UniformValue& value) {
             std::visit([&](const auto& v) {
@@ -75,8 +75,8 @@ class Program : NonCopyable {
         void swap(Program& other);
         void destroy();
 
-        void load_graphics(const std::string& frag, const std::string& vert, Span<const std::string> defines);
-        void load_compute(const std::string& comp, Span<const std::string> defines);
+        void load_graphics(const std::string& vert, const std::string& frag);
+        void load_compute(const std::string& comp);
 
         VkPipeline get_or_create_pipeline() const;
         void write_uniform(u32 name_hash, const void* data, u32 size);

@@ -8,7 +8,7 @@
 namespace NEBULA {
 
 Scene::Scene() {
-    _sky_material.set_program(Program::from_files("sky.slang", "screen.slang"));
+    _sky_material.set_program(Program::from_files("screen.slang", "sky.slang"));
     _sky_material.set_depth_test_mode(DepthTestMode::None);
 
     _envmap = std::make_shared<Texture>(Texture::empty_cubemap(4, ImageFormat::RGBA8_UNORM));

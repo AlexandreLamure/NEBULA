@@ -95,12 +95,8 @@ void Material::bind() const {
 Material Material::textured_pbr_material(bool alpha_test) {
     Material material;
 
-    std::vector<std::string> defines;
-    if(alpha_test) {
-        defines.emplace_back("ALPHA_TEST");
-    }
-
-    material._program = Program::from_files("lit.slang", "basic.slang", defines);
+    const char* frag = alpha_test ? "lit_ALPHA_TEST.slang" : "lit.slang";
+    material._program = Program::from_files("basic.slang", frag);
 
     material.set_texture(0u, default_white_texture());
     material.set_texture(1u, default_normal_texture());

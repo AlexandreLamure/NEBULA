@@ -151,7 +151,7 @@ void blit_to_screen(const Texture& tex) {
     ALWAYS_ASSERT(ctx().rendering_active && ctx().rendering_to_swapchain,
                   "blit_to_screen requires an active swapchain RenderPass");
 
-    const std::shared_ptr<Program> blit_program = Program::from_files("passthrough.slang", "screen.slang");
+    const std::shared_ptr<Program> blit_program = Program::from_files("screen.slang", "passthrough.slang");
     blit_program->bind();
     tex.bind(0);
     draw_full_screen_triangle();

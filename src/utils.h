@@ -152,24 +152,6 @@ class Span {
 
 };
 
-// Boost-style mix: XOR the value into the seed with the golden-ratio constant 0x9e3779b9.
-template<typename T>
-inline constexpr void hash_combine(T& seed, T value) {
-    seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-}
-
-template<typename T, typename V = typename T::value_type>
-struct CollectionHasher : std::hash<V> {
-    size_t operator()(const T& t) const noexcept {
-        size_t h = size_t(0xd5a7de585d2af52b);
-        for(const auto& e : t) {
-            hash_combine(h, std::hash<V>::operator()(e));
-        }
-        return h;
-    }
-};
-
-
 // Constexpr CRC-32 so HASH("foo") is a compile-time stand-in for a named uniform.
 inline constexpr u32 str_hash(std::string_view str, u32 seed = 0xCAFECAFE) {
     constexpr u32 lut[256] = {

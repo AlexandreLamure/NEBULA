@@ -57,13 +57,8 @@ static bool file_exists(const std::string& path) {
     return false;
 }
 
-static std::string spirv_path(const std::string& file, Span<const std::string> defines) {
-    const std::string name = module_name_from_file(file);
-    std::string with_defs = name;
-    for(const std::string& def : defines) {
-        with_defs += "_" + def;
-    }
-    const std::string path = std::string(NEBULA_SHADER_PATH) + with_defs + ".spv";
+static std::string spirv_path(const std::string& file) {
+    const std::string path = std::string(NEBULA_SHADER_PATH) + module_name_from_file(file) + ".spv";
     ALWAYS_ASSERT(file_exists(path), ("Unable to find SPIR-V: \"" + path + '"').c_str());
     return path;
 }
@@ -264,21 +259,21 @@ void Program::swap(Program& other) {
     std::swap(_is_compute, other._is_compute);
 }
 
-Program::Program(const std::string& frag, const std::string& vert, Span<const std::string> defines) {
-    load_graphics(frag, vert, defines);
+Program::Program(const std::string& vert, const std::string& frag) {
+    load_graphics(vert, frag);
 }
 
-Program::Program(const std::string& comp, Span<const std::string> defines) : _is_compute(true) {
-    load_compute(comp, defines);
+Program::Program(const std::string& comp) : _is_compute(true) {
+    load_compute(comp);
 }
 
-void Program::load_graphics(const std::string& frag, const std::string& vert, Span<const std::string> defines) {
-    _vert_module = create_shader_module(load_spirv(spirv_path(vert, defines)));
-    _frag_module = create_shader_module(load_spirv(spirv_path(frag, defines)));
+void Program::load_graphics(const std::string& vert, const std::string& frag) {
+    _vert_module = create_shader_module(load_spirv(spirv_path(vert)));
+    _frag_module = create_shader_module(load_spirv(spirv_path(frag)));
 }
 
-void Program::load_compute(const std::string& comp, Span<const std::string> defines) {
-    _comp_module = create_shader_module(load_spirv(spirv_path(comp, defines)));
+void Program::load_compute(const std::string& comp) {
+    _comp_module = create_shader_module(load_spirv(spirv_path(comp)));
 
     const VkComputePipelineCreateInfo pipeline_ci{
         .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
@@ -378,32 +373,25 @@ bool Program::is_compute() const {
     return _is_compute;
 }
 
-std::shared_ptr<Program> Program::from_file(const std::string& comp, Span<const std::string> defines) {
-    static std::unordered_map<std::vector<std::string>, std::weak_ptr<Program>, CollectionHasher<std::vector<std::string>>> loaded;
+std::shared_ptr<Program> Program::from_file(const std::string& comp) {
+    static std::unordered_map<std::string, std::weak_ptr<Program>> loaded;
 
-    std::vector<std::string> key(defines.begin(), defines.end());
-    key.emplace_back(comp);
-
-    auto& weak_program = loaded[key];
+    auto& weak_program = loaded[comp];
     auto program = weak_program.lock();
     if(!program) {
-        program = std::make_shared<Program>(comp, defines);
+        program = std::make_shared<Program>(comp);
         weak_program = program;
     }
     return program;
 }
 
-std::shared_ptr<Program> Program::from_files(const std::string& frag, const std::string& vert, Span<const std::string> defines) {
-    static std::unordered_map<std::vector<std::string>, std::weak_ptr<Program>, CollectionHasher<std::vector<std::string>>> loaded;
+std::shared_ptr<Program> Program::from_files(const std::string& vert, const std::string& frag) {
+    static std::unordered_map<std::string, std::weak_ptr<Program>> loaded;
 
-    std::vector<std::string> key(defines.begin(), defines.end());
-    key.emplace_back(frag);
-    key.emplace_back(vert);
-
-    auto& weak_program = loaded[key];
+    auto& weak_program = loaded[vert + '\n' + frag];
     auto program = weak_program.lock();
     if(!program) {
-        program = std::make_shared<Program>(frag, vert, defines);
+        program = std::make_shared<Program>(vert, frag);
         weak_program = program;
     }
     return program;

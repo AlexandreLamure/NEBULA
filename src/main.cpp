@@ -401,7 +401,7 @@ int main(int argc, char** argv) {
 
     load_default_scene();
 
-    auto tonemap_program = Program::from_files("tonemap.slang", "screen.slang");
+    auto tonemap_program = Program::from_files("screen.slang", "tonemap.slang");
     RendererState renderer;
 
     for(;;) {
