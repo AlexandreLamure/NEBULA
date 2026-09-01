@@ -127,6 +127,9 @@ void draw_full_screen_triangle() {
         audit_bindings();
     }
 
+    // Fullscreen passes skip Material::bind; keep raster state explicit.
+    ctx().cull_mode = VK_CULL_MODE_NONE;
+    ctx().depth_test_enable = false;
     ctx().vertex_input = VertexLayout::None;
     if(ctx().bound_program) {
         ctx().bound_program->bind();

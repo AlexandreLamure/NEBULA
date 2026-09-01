@@ -1117,6 +1117,10 @@ void begin_frame() {
 
     InFlightFrame& frame = g_ctx.frames[g_ctx.frame_index];
     g_ctx.bound_program = nullptr;
+    g_ctx.alpha_blend = false;
+    g_ctx.cull_mode = VK_CULL_MODE_BACK_BIT;
+    g_ctx.depth_test_enable = true;
+    g_ctx.depth_compare_op = VK_COMPARE_OP_GREATER_OR_EQUAL;
     g_ctx.bound_vertex = {};
     g_ctx.bound_index = {};
     for(BoundBuffer& bound : g_ctx.bound_descriptors) {
