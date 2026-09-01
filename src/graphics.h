@@ -12,10 +12,6 @@ namespace OM3D {
 
 class Texture;
 
-// SPIR-V next to the executable (slangc writes here at build time). Run from the build directory.
-static constexpr std::string_view shader_path = "./";
-static constexpr std::string_view data_path = "../../data/";
-
 enum class BufferUsage {
     Attribute,
     Index,

@@ -141,7 +141,7 @@ void load_scene(const std::string& filename) {
 
 std::vector<std::string> list_data_files(Span<const std::string> extensions = {}) {
     std::vector<std::string> files;
-    for(auto&& entry : std::filesystem::directory_iterator(data_path)) {
+    for(auto&& entry : std::filesystem::directory_iterator(OM3D_DATA_PATH)) {
         if(entry.status().type() == std::filesystem::file_type::regular) {
             const auto ext = entry.path().extension();
 
@@ -340,8 +340,8 @@ void gui(ImGuiRenderer& imgui) {
 
 
 void load_default_scene() {
-    load_scene(std::string(data_path) + "DamagedHelmet.glb");
-    load_envmap(std::string(data_path) + "pretoria_gardens.jpg");
+    load_scene(std::string(OM3D_DATA_PATH) + "DamagedHelmet.glb");
+    load_envmap(std::string(OM3D_DATA_PATH) + "pretoria_gardens.jpg");
 
     // Add lights
     {

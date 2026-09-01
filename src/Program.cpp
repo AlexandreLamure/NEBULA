@@ -63,11 +63,9 @@ static std::string spirv_path(const std::string& file, Span<const std::string> d
     for(const std::string& def : defines) {
         with_defs += "_" + def;
     }
-    const std::string preferred = std::string(shader_path) + with_defs + ".spv";
-    if(file_exists(preferred)) {
-        return preferred;
-    }
-    return std::string(shader_path) + name + ".spv";
+    const std::string path = std::string(OM3D_SHADER_PATH) + with_defs + ".spv";
+    ALWAYS_ASSERT(file_exists(path), ("Unable to find SPIR-V: \"" + path + '"').c_str());
+    return path;
 }
 
 static std::vector<u32> load_spirv(const std::string& path) {

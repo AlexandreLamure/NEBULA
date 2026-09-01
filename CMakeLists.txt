@@ -75,8 +75,13 @@ add_executable(OM3D ${SOURCE_FILES} ${EXTERNAL_FILES} ${SHADER_FILES})
 target_link_libraries(OM3D glfw)
 target_compile_options(OM3D PUBLIC ${COMPILE_OPTIONS})
 
-
-# SPIR-V is written next to the executable. Run OM3D from the build directory.
+# Bake absolute paths so they do not depend on cwd or build-dir layout.
+file(TO_CMAKE_PATH "${CMAKE_SOURCE_DIR}/data" OM3D_DATA_DIR)
+file(TO_CMAKE_PATH "${CMAKE_CURRENT_BINARY_DIR}" OM3D_SHADER_DIR)
+target_compile_definitions(OM3D PRIVATE
+    "OM3D_DATA_PATH=\"${OM3D_DATA_DIR}/\""
+    "OM3D_SHADER_PATH=\"${OM3D_SHADER_DIR}/\""
+)
 set(SHADER_SOURCE_DIR ${CMAKE_SOURCE_DIR}/shaders)
 set(SPIRV_FILES)
 
@@ -89,6 +94,7 @@ macro(add_slang_shader SHADER_FILE)
         set(NAME_SUFFIX "${NAME_SUFFIX}_${DEF}")
     endforeach()
 
+    # SPIR-V is written next to the executable
     set(SHADER_BIN ${CMAKE_CURRENT_BINARY_DIR}/${SHADER_NAME}${NAME_SUFFIX}.spv)
     add_custom_command(
         OUTPUT ${SHADER_BIN}
