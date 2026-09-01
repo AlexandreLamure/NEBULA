@@ -13,7 +13,7 @@
 #include <memory>
 
 
-namespace OM3D {
+namespace NEBULA {
 
 struct TextureData {
     std::unique_ptr<u8[]> data;

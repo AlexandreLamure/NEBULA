@@ -5,7 +5,7 @@
 
 #include <glm/vec3.hpp>
 
-namespace OM3D {
+namespace NEBULA {
 
 class PointLight {
 

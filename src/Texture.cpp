@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <cstring>
 
-namespace OM3D {
+namespace NEBULA {
 
 Result<TextureData> TextureData::from_file(const std::string& file) {
     int width = 0;

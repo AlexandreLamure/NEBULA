@@ -15,7 +15,7 @@
 
 struct GLFWwindow;
 
-namespace OM3D {
+namespace NEBULA {
 
 class Program;
 class Texture;
@@ -188,7 +188,7 @@ inline bool vk_is_recording() {
 inline u32 vk_frame_index() { return ctx().frame_index; }
 
 void vk_check_impl(VkResult result, const char* call, const char* file, int line);
-#define vk_check(call) ::OM3D::vk_check_impl((call), #call, __FILE__, __LINE__)
+#define vk_check(call) ::NEBULA::vk_check_impl((call), #call, __FILE__, __LINE__)
 
 // One-shot command buffer: record, submit, wait. Used for staging uploads and
 // init-time compute (BRDF LUT, env cubemap) so the result exists before the first frame.

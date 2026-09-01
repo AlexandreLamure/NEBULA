@@ -2,7 +2,7 @@
 
 #include <volk.h>
 
-namespace OM3D {
+namespace NEBULA {
 
 // RGB8 maps to RGBA8 — RGB8 is poorly supported as an optimal Vulkan format.
 VkFormat image_format_to_vk(ImageFormat format) {

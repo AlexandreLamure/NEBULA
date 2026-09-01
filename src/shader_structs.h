@@ -8,7 +8,7 @@
 
 #include <cstddef>
 
-namespace OM3D {
+namespace NEBULA {
 namespace shader {
 
 // CPU copies of the GPU structs in shaders/structs.slang.

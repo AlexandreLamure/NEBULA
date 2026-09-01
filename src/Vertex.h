@@ -5,7 +5,7 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
-namespace OM3D {
+namespace NEBULA {
 
 struct Vertex {
     glm::vec3 position;

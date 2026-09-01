@@ -1,6 +1,6 @@
 #include "Camera.h"
 
-namespace OM3D {
+namespace NEBULA {
 
 
 // Reverse-Z infinite perspective stores 0 in m[3][3]; an orthographic matrix stores 1.

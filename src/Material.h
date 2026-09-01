@@ -7,7 +7,7 @@
 #include <memory>
 #include <vector>
 
-namespace OM3D {
+namespace NEBULA {
 
 enum class BlendMode {
     None,

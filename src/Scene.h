@@ -8,7 +8,7 @@
 #include <vector>
 #include <memory>
 
-namespace OM3D {
+namespace NEBULA {
 
 class Scene : NonMovable {
 

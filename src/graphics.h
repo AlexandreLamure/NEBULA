@@ -8,7 +8,7 @@
 
 struct GLFWwindow;
 
-namespace OM3D {
+namespace NEBULA {
 
 class Texture;
 

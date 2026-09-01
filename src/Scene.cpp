@@ -5,7 +5,7 @@
 
 #include <shader_structs.h>
 
-namespace OM3D {
+namespace NEBULA {
 
 Scene::Scene() {
     _sky_material.set_program(Program::from_files("sky.slang", "screen.slang"));

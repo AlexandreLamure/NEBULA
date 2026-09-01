@@ -21,7 +21,7 @@
 #pragma GCC diagnostic pop
 #endif
 
-namespace OM3D {
+namespace NEBULA {
 
 bool display_gltf_loading_warnings = false;
 

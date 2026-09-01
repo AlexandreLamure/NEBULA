@@ -10,7 +10,7 @@
 struct ImDrawData;
 struct GLFWwindow;
 
-namespace OM3D {
+namespace NEBULA {
 
 class ImGuiRenderer : NonMovable {
     public:

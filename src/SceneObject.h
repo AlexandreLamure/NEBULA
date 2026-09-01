@@ -8,7 +8,7 @@
 
 #include <glm/matrix.hpp>
 
-namespace OM3D {
+namespace NEBULA {
 
 class SceneObject {
 

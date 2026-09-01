@@ -1,6 +1,6 @@
 #include "BufferMapping.h"
 
-namespace OM3D {
+namespace NEBULA {
 
 BufferMappingBase::BufferMappingBase(BufferMappingBase&& other) {
     swap(other);

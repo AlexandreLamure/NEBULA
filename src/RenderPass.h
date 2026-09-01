@@ -7,7 +7,7 @@
 #include <array>
 #include <utility>
 
-namespace OM3D {
+namespace NEBULA {
 
 // Runs fn inside vkCmdBeginRendering / vkCmdEndRendering (Vulkan 1.3 dynamic rendering).
 // Ending the pass transitions offscreen color attachments to SHADER_READ_ONLY so the

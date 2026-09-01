@@ -29,7 +29,7 @@ public struct PointLight {
 };
 
 // Push constants for per-draw data (model matrix, material factors, exposure, ...).
-// Offsets must match OM3D::PushConstants in Program.h.
+// Offsets must match NEBULA::PushConstants in Program.h.
 public struct PushConstants {
     public float4x4 model;
     public float3 base_color_factor;

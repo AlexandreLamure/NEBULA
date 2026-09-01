@@ -15,7 +15,7 @@
 #include <iostream>
 #include <vector>
 
-namespace OM3D {
+namespace NEBULA {
 
 // Singleton containing the Vulkan context.
 static GraphicsContext g_ctx;
@@ -32,7 +32,7 @@ void vk_check_impl(VkResult result, const char* call, const char* file, int line
     fatal(msg, file, line);
 }
 
-#ifdef OM3D_DEBUG
+#ifdef NEBULA_DEBUG
 static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT severity,
     VkDebugUtilsMessageTypeFlagsEXT,
@@ -972,7 +972,7 @@ void vk_init(GLFWwindow* window) {
 
     std::vector<const char*> instance_exts(glfw_exts, glfw_exts + glfw_ext_count);
 
-#ifdef OM3D_DEBUG
+#ifdef NEBULA_DEBUG
     const bool use_validation = has_instance_layer("VK_LAYER_KHRONOS_validation");
     if(!use_validation) {
         std::cerr << "VK_LAYER_KHRONOS_validation not found; continuing without it" << std::endl;
@@ -984,17 +984,17 @@ void vk_init(GLFWwindow* window) {
 
     const VkApplicationInfo app_info{
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-        .pApplicationName = "OM3D",
+        .pApplicationName = "NEBULA",
         .apiVersion = VK_API_VERSION_1_3,
     };
 
     const VkInstanceCreateInfo instance_ci{
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-#ifdef OM3D_DEBUG
+#ifdef NEBULA_DEBUG
         .pNext = &debug_ci,
 #endif
         .pApplicationInfo = &app_info,
-#ifdef OM3D_DEBUG
+#ifdef NEBULA_DEBUG
         .enabledLayerCount = use_validation ? 1u : 0u,
         .ppEnabledLayerNames = use_validation ? &validation_layer : nullptr,
 #endif
@@ -1004,7 +1004,7 @@ void vk_init(GLFWwindow* window) {
     vk_check(vkCreateInstance(&instance_ci, nullptr, &g_ctx.instance));
     volkLoadInstance(g_ctx.instance);
 
-#ifdef OM3D_DEBUG
+#ifdef NEBULA_DEBUG
     vk_check(vkCreateDebugUtilsMessengerEXT(g_ctx.instance, &debug_ci, nullptr, &g_ctx.debug_messenger));
 #endif
 
@@ -1281,7 +1281,7 @@ void vk_destroy() {
         vkDestroySurfaceKHR(g_ctx.instance, g_ctx.surface, nullptr);
         g_ctx.surface = VK_NULL_HANDLE;
     }
-#ifdef OM3D_DEBUG
+#ifdef NEBULA_DEBUG
     if(g_ctx.debug_messenger) {
         vkDestroyDebugUtilsMessengerEXT(g_ctx.instance, g_ctx.debug_messenger, nullptr);
         g_ctx.debug_messenger = VK_NULL_HANDLE;

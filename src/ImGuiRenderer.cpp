@@ -19,7 +19,7 @@
 #include <imgui/fa-solid-900.h>
 
 
-namespace OM3D {
+namespace NEBULA {
 
 static ImGuiMouseButton button_to_imgui(int button) {
     switch(button) {

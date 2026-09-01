@@ -16,7 +16,7 @@
 #include <vector>
 #include <variant>
 
-namespace OM3D {
+namespace NEBULA {
 
 // CPU mirror of the Slang `PushConstants` struct in structs.slang.
 // `set_uniform` writes here; `vkCmdPushConstants` uploads the blob at bind/draw.

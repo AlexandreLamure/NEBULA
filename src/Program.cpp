@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace OM3D {
+namespace NEBULA {
 
 static_assert(offsetof(PushConstants, model) == 0);
 static_assert(offsetof(PushConstants, base_color_factor) == 64);
@@ -63,7 +63,7 @@ static std::string spirv_path(const std::string& file, Span<const std::string> d
     for(const std::string& def : defines) {
         with_defs += "_" + def;
     }
-    const std::string path = std::string(OM3D_SHADER_PATH) + with_defs + ".spv";
+    const std::string path = std::string(NEBULA_SHADER_PATH) + with_defs + ".spv";
     ALWAYS_ASSERT(file_exists(path), ("Unable to find SPIR-V: \"" + path + '"').c_str());
     return path;
 }

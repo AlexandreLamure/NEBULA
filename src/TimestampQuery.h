@@ -6,9 +6,9 @@
 #include <string>
 #include <utility>
 
-namespace OM3D {
+namespace NEBULA {
 
-#define PROFILE_GPU(name_expr) auto CREATE_UNIQUE_NAME_WITH_PREFIX(gpu_prof) = ::OM3D::ScopeGuard([zone_id = ::OM3D::profile::begin_profile_zone(name_expr)] { ::OM3D::profile::end_profile_zone(zone_id); })
+#define PROFILE_GPU(name_expr) auto CREATE_UNIQUE_NAME_WITH_PREFIX(gpu_prof) = ::NEBULA::ScopeGuard([zone_id = ::NEBULA::profile::begin_profile_zone(name_expr)] { ::NEBULA::profile::end_profile_zone(zone_id); })
 
 
 class TimestampQuery : NonCopyable {

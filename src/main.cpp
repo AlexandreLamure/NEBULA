@@ -17,7 +17,7 @@
 #include <vector>
 #include <filesystem>
 
-using namespace OM3D;
+using namespace NEBULA;
 
 
 static float delta_time = 0.0f;
@@ -30,7 +30,7 @@ static float exposure = 0.33f;
 static std::unique_ptr<Scene> scene;
 static std::shared_ptr<Texture> envmap;
 
-namespace OM3D {
+namespace NEBULA {
 extern bool audit_bindings_before_draw;
 }
 
@@ -39,7 +39,7 @@ void parse_args(int argc, char** argv) {
         const std::string_view arg = argv[i];
 
         if(arg == "--validate") {
-            OM3D::audit_bindings_before_draw = true;
+            NEBULA::audit_bindings_before_draw = true;
         } else {
             std::cerr << "Unknown argument \"" << arg << "\"" << std::endl;
         }
@@ -141,7 +141,7 @@ void load_scene(const std::string& filename) {
 
 std::vector<std::string> list_data_files(Span<const std::string> extensions = {}) {
     std::vector<std::string> files;
-    for(auto&& entry : std::filesystem::directory_iterator(OM3D_DATA_PATH)) {
+    for(auto&& entry : std::filesystem::directory_iterator(NEBULA_DATA_PATH)) {
         if(entry.status().type() == std::filesystem::file_type::regular) {
             const auto ext = entry.path().extension();
 
@@ -240,7 +240,7 @@ void gui(ImGuiRenderer& imgui) {
         ImGui::Separator();
         ImGui::Text("%.2f ms", delta_time * 1000.0f);
 
-#ifdef OM3D_DEBUG
+#ifdef NEBULA_DEBUG
         ImGui::Separator();
         ImGui::TextColored(warning_text_color, ICON_FA_BUG " (DEBUG)");
 #endif
@@ -340,8 +340,8 @@ void gui(ImGuiRenderer& imgui) {
 
 
 void load_default_scene() {
-    load_scene(std::string(OM3D_DATA_PATH) + "DamagedHelmet.glb");
-    load_envmap(std::string(OM3D_DATA_PATH) + "pretoria_gardens.jpg");
+    load_scene(std::string(NEBULA_DATA_PATH) + "DamagedHelmet.glb");
+    load_envmap(std::string(NEBULA_DATA_PATH) + "pretoria_gardens.jpg");
 
     // Add lights
     {
@@ -391,7 +391,7 @@ int main(int argc, char** argv) {
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-    GLFWwindow* window = glfwCreateWindow(1600, 900, "OM3D", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(1600, 900, "NEBULA", nullptr, nullptr);
     glfw_check(window);
     DEFER(glfwDestroyWindow(window));
 

@@ -5,7 +5,7 @@
 
 #include <volk.h>
 
-namespace OM3D {
+namespace NEBULA {
 
 enum class ImageFormat {
     RGBA8_UNORM,

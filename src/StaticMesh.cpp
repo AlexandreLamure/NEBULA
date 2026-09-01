@@ -5,7 +5,7 @@
 
 #include <volk.h>
 
-namespace OM3D {
+namespace NEBULA {
 
 extern bool audit_bindings_before_draw;
 

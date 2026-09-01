@@ -11,7 +11,7 @@
 #include <windows.h>
 #endif
 
-namespace OM3D {
+namespace NEBULA {
 
 #ifdef OS_WIN
 bool running_in_debugger() {

@@ -9,12 +9,12 @@
 #include <array>
 
 #define FWD(var) std::forward<decltype(var)>(var)
-#define HASH(str) ([] { static constexpr u32 result = ::OM3D::str_hash(str); return result; }())
+#define HASH(str) ([] { static constexpr u32 result = ::NEBULA::str_hash(str); return result; }())
 
 // Execute expr at scope exit
-#define DEFER(expr) auto CREATE_UNIQUE_NAME_WITH_PREFIX(defer) = ::OM3D::ScopeGuard([&] { expr; })
+#define DEFER(expr) auto CREATE_UNIQUE_NAME_WITH_PREFIX(defer) = ::NEBULA::ScopeGuard([&] { expr; })
 // Print message and terminate immediatly
-#define FATAL(msg) ::OM3D::fatal((msg), __FILE__, __LINE__)
+#define FATAL(msg) ::NEBULA::fatal((msg), __FILE__, __LINE__)
 // Assert in debug and release
 #define ALWAYS_ASSERT(cond, msg) do { if(!(cond)) { FATAL(msg); } } while(false)
 
@@ -22,11 +22,11 @@
 #ifdef NDEBUG
 #define DEBUG_ASSERT(cond) do { /*(void)(cond);*/ } while(false)
 #else
-#define OM3D_DEBUG
+#define NEBULA_DEBUG
 #define DEBUG_ASSERT(cond) ALWAYS_ASSERT(cond, "Assert failed: " #cond)
 #endif
 
-namespace OM3D {
+namespace NEBULA {
 
 #ifdef OS_WIN
 bool running_in_debugger();

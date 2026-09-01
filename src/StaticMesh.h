@@ -7,7 +7,7 @@
 
 #include <vector>
 
-namespace OM3D {
+namespace NEBULA {
 
 struct MeshData {
     std::vector<Vertex> vertices;

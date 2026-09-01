@@ -12,7 +12,7 @@
 #include <vector>
 #include <cstring>
 
-namespace OM3D {
+namespace NEBULA {
 
 // TODO: maybe make a descriptor set per pass type
 // Descriptor set 0 — one layout for the whole engine (GL bind emulator):

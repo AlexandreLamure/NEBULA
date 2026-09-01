@@ -5,7 +5,7 @@
 
 #include <utils.h>
 
-namespace OM3D {
+namespace NEBULA {
 
 struct Frustum {
     glm::vec3 _near_normal;

@@ -4,7 +4,7 @@
 #include <graphics.h>
 #include <VkContext.h>
 
-namespace OM3D {
+namespace NEBULA {
 
 class BufferMappingBase : NonCopyable {
     public:

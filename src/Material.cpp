@@ -4,7 +4,7 @@
 
 #include <algorithm>
 
-namespace OM3D {
+namespace NEBULA {
 
 Material::Material() {
 }

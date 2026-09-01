@@ -5,7 +5,7 @@
 
 #include <vector>
 
-namespace OM3D {
+namespace NEBULA {
 
 template<typename T>
 class TypedBuffer : public ByteBuffer {

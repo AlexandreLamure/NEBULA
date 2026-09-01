@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-namespace OM3D {
+namespace NEBULA {
 
 struct AllocatedBuffer {
     VkBuffer buffer = VK_NULL_HANDLE;

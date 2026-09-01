@@ -5,7 +5,7 @@
 #include <BufferMapping.h>
 #include <VkContext.h>
 
-namespace OM3D {
+namespace NEBULA {
 
 class ByteBuffer : NonCopyable {
 

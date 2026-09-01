@@ -9,7 +9,7 @@
 
 #include <volk.h>
 
-namespace OM3D {
+namespace NEBULA {
 
 namespace profile {
     struct Marker {
