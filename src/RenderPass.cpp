@@ -16,6 +16,8 @@ static void set_y_flipped_viewport(VkCommandBuffer cmd, glm::uvec2 size) {
         .y = height,
         .width = float(size.x),
         .height = -height,
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f,
     };
     const VkRect2D scissor{
         .extent = {size.x, size.y},
