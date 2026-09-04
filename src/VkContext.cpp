@@ -547,39 +547,6 @@ static void create_pass_descriptor_pool(VkDescriptorPool& pool) {
     vk_check(vkCreateDescriptorPool(g_ctx.device, &pool_ci, nullptr, &pool));
 }
 
-// FIXME: really needed?
-static void create_dummy_frame_buffers() {
-    const auto create_host_buffer = [](VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer& buffer, VmaAllocation& allocation) {
-        const VkBufferCreateInfo buffer_ci{
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = size,
-            .usage = usage,
-            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-        };
-        const VmaAllocationCreateInfo alloc_ci{
-            .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-            .usage = VMA_MEMORY_USAGE_AUTO,
-        };
-        VmaAllocationInfo info{};
-        vk_check(vmaCreateBuffer(g_ctx.allocator, &buffer_ci, &alloc_ci, &buffer, &allocation, &info));
-        ALWAYS_ASSERT(info.pMappedData, "Dummy frame buffer is not mapped");
-        std::memset(info.pMappedData, 0, size_t(size));
-    };
-
-    create_host_buffer(
-        sizeof(shader::FrameData),
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-        g_ctx.dummy_frame_ubo,
-        g_ctx.dummy_frame_ubo_allocation
-    );
-    create_host_buffer(
-        sizeof(shader::PointLight),
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-        g_ctx.dummy_lights_ssbo,
-        g_ctx.dummy_lights_ssbo_allocation
-    );
-}
-
 static void create_descriptor_pools() {
     const VkDescriptorPoolSize frame_pool_sizes[] = {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, frames_in_flight + 1},
@@ -993,9 +960,6 @@ void immediate_submit(std::function<void(VkCommandBuffer)>&& record) {
     // (the GL-style API) record here instead of into a frame that is not active.
     const VkCommandBuffer prev_immediate = g_ctx.immediate_cmd;
     g_ctx.immediate_cmd = cmd;
-    // Bind persistent set 0 with whatever sticky/dummy frame state we have so
-    // compute pipelines that share the layout are valid even if they only use set 1.
-    flush_frame_descriptors();
     record(cmd);
     g_ctx.immediate_cmd = prev_immediate;
 
@@ -1246,15 +1210,8 @@ void vk_init(GLFWwindow* window) {
     create_immediate_pool();
     create_pipeline_layout();
     create_samplers();
-    create_dummy_frame_buffers();
     create_descriptor_pools();
     create_fallback_sampled_texture();
-    // Seed every frame set with dummy buffers + fallback images.
-    flush_frame_descriptors();
-    for(u32 i = 0; i != frames_in_flight; ++i) {
-        g_ctx.frame_index = i;
-        flush_frame_descriptors();
-    }
     g_ctx.frame_index = 0;
 }
 
@@ -1326,10 +1283,6 @@ void begin_frame() {
     g_ctx.rendering_active = false;
     g_ctx.rendering_to_swapchain = false;
     g_ctx.swapchain_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-    // Point set 0 at dummy buffers until Scene::render writes the real frame data.
-    // Avoids leaving the persistent set referencing buffers just freed above.
-    flush_frame_descriptors();
 }
 
 void end_frame() {
