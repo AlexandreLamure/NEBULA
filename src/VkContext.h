@@ -31,7 +31,7 @@ static constexpr u32 frame_lights_binding = 1;
 static constexpr u32 frame_env_binding = 2;
 static constexpr u32 frame_brdf_binding = 3;
 
-// Set 1 — pass (allocated per draw/dispatch for now):
+// Set 1 — pass (pushed each draw/dispatch):
 //   0-3: sampled textures, 4: storage image
 static constexpr u32 pass_set = 1;
 static constexpr u32 pass_texture_slot_count = 4;
@@ -57,7 +57,6 @@ struct InFlightFrame {
     VkCommandBuffer command_buffer = VK_NULL_HANDLE;
     VkFence submitted = VK_NULL_HANDLE;
     VkSemaphore acquire = VK_NULL_HANDLE;
-    VkDescriptorPool pass_descriptor_pool = VK_NULL_HANDLE;
     VkDescriptorSet frame_descriptor_set = VK_NULL_HANDLE;
 };
 
@@ -123,10 +122,7 @@ struct GraphicsContext {
     VkDescriptorSetLayout frame_set_layout = VK_NULL_HANDLE;
     VkDescriptorSetLayout pass_set_layout = VK_NULL_HANDLE;
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
-    // Long-lived pool for the per-slot frame sets (not reset each frame).
     VkDescriptorPool frame_descriptor_pool = VK_NULL_HANDLE;
-    VkDescriptorPool immediate_pass_descriptor_pool = VK_NULL_HANDLE;
-    VkDescriptorSet immediate_frame_descriptor_set = VK_NULL_HANDLE;
 
     // Safe defaults so set 0 is always writable before Scene::render fills real buffers.
     VkBuffer dummy_frame_ubo = VK_NULL_HANDLE;
@@ -255,8 +251,7 @@ void flush_all_deletions();
 // Write sticky frame resources into the current slot's persistent set 0 and bind it.
 void flush_frame_descriptors();
 
-// Allocate one pass descriptor set (set 1) from the per-frame/immediate pool, write
-// material/fullscreen/storage bindings, and bind it.
+// Push sticky pass textures/storage into set 1 for the next draw/dispatch.
 void flush_descriptor_bindings();
 
 void dispatch_compute(u32 x, u32 y, u32 z);

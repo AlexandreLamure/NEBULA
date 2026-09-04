@@ -16,7 +16,7 @@ namespace NEBULA {
 
 // Descriptor sets:
 //   Set 0 (frame, persistent): frame UBO, lights SSBO, env cubemap, BRDF LUT
-//   Set 1 (pass, per-draw for now): texture slots 0-3 + storage image
+//   Set 1 (pass, per-draw with push descriptors): texture slots 0-3 + storage image
 // Texture::bind slots 0-3 → pass set; slots 4-5 → frame set (env / BRDF).
 
 Texture brdf_lut_texture;
