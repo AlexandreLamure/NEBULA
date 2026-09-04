@@ -14,13 +14,10 @@
 
 namespace NEBULA {
 
-// TODO: maybe make a descriptor set per pass type
-// Descriptor set 0 — one layout for the whole engine (GL bind emulator):
-//   0: frame UBO (ByteBuffer::bind Uniform, 0)
-//   1: point-light SSBO (ByteBuffer::bind Storage, 1)
-//   2-5: material textures (Texture::bind slots 0-3)
-//   6-7: env cubemap / BRDF LUT (Texture::bind slots 4-5)
-//   8: storage image (Texture::bind_as_image, compute writes)
+// Descriptor sets:
+//   Set 0 (frame, persistent): frame UBO, lights SSBO, env cubemap, BRDF LUT
+//   Set 1 (pass, per-draw for now): texture slots 0-3 + storage image
+// Texture::bind slots 0-3 → pass set; slots 4-5 → frame set (env / BRDF).
 
 Texture brdf_lut_texture;
 
@@ -186,11 +183,11 @@ void audit_bindings() {
         ALWAYS_ASSERT(ctx().bound_index.buffer, "No index buffer bound");
     }
 
-    for(u32 binding = 0; binding < descriptor_binding_count; ++binding) {
-        const BoundBuffer& bound = ctx().bound_descriptors[binding];
-        if(bound.buffer) {
-            ALWAYS_ASSERT(bound.size > 0, "Bound descriptor buffer has zero size");
-        }
+    if(ctx().bound_frame_ubo.buffer) {
+        ALWAYS_ASSERT(ctx().bound_frame_ubo.size > 0, "Bound frame UBO has zero size");
+    }
+    if(ctx().bound_frame_lights.buffer) {
+        ALWAYS_ASSERT(ctx().bound_frame_lights.size > 0, "Bound frame lights SSBO has zero size");
     }
 
     for(const BoundSampledTexture& bound : ctx().bound_textures) {

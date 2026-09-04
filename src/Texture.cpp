@@ -556,7 +556,7 @@ void Texture::bind(u32 index) const {
     }
 }
 
-// GL imageLoad/Store emulator: the slot is ignored because storage is always descriptor binding 8.
+// GL imageLoad/Store emulator: the slot is ignored because storage is always pass-set binding 4.
 void Texture::bind_as_image(u32 index, AccessType) {
     (void)index;
     _layout = VK_IMAGE_LAYOUT_GENERAL;

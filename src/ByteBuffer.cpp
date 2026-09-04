@@ -127,8 +127,13 @@ void ByteBuffer::bind(BufferUsage usage) const {
 
 void ByteBuffer::bind(BufferUsage usage, u32 index) const {
     ALWAYS_ASSERT(usage == BufferUsage::Uniform || usage == BufferUsage::Storage, "Index bind is only available for uniform and storage buffers");
-    ALWAYS_ASSERT(index < descriptor_binding_count, "Descriptor binding index is out of range");
-    ctx().bound_descriptors[index] = {_buffer, _size};
+    if(usage == BufferUsage::Uniform) {
+        ALWAYS_ASSERT(index == frame_ubo_binding, "Uniform buffers bind to the frame UBO slot");
+        ctx().bound_frame_ubo = {_buffer, _size};
+        return;
+    }
+    ALWAYS_ASSERT(index == frame_lights_binding, "Storage buffers bind to the frame lights slot");
+    ctx().bound_frame_lights = {_buffer, _size};
 }
 
 size_t ByteBuffer::byte_size() const {

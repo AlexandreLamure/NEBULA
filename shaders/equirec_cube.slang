@@ -1,7 +1,7 @@
 import utils;
 
-[[vk::binding(2, 0)]] Sampler2D in_equirec;
-[[vk::binding(8, 0)]] RWTexture2DArray<float4> out_cube;
+[[vk::binding(0, 1)]] Sampler2D in_equirec;
+[[vk::binding(4, 1)]] RWTexture2DArray<float4> out_cube;
 
 // Direction of a cubemap texel: faces 0–5 are ±X, ±Z, ±Y with UV remapped into clip space.
 float3 cube_dir(float2 tex_coord, uint side) {

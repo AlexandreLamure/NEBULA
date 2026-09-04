@@ -1,7 +1,7 @@
 import structs;
 import utils;
 
-[[vk::binding(2, 0)]] Sampler2D in_texture;
+[[vk::binding(0, 1)]] Sampler2D in_texture;
 
 struct VSInput {
     [[vk::location(0)]] float2 pos : POSITION;

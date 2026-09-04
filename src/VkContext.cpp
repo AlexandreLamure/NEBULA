@@ -8,6 +8,7 @@
 #include "Texture.h"
 #include "graphics.h"
 #include "ImageFormat.h"
+#include "shader_structs.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -178,8 +179,8 @@ static void destroy_frames() {
         if(frame.acquire) {
             vkDestroySemaphore(g_ctx.device, frame.acquire, nullptr);
         }
-        if(frame.descriptor_pool) {
-            vkDestroyDescriptorPool(g_ctx.device, frame.descriptor_pool, nullptr);
+        if(frame.pass_descriptor_pool) {
+            vkDestroyDescriptorPool(g_ctx.device, frame.pass_descriptor_pool, nullptr);
         }
         frame = {};
     }
@@ -361,24 +362,37 @@ static void destroy_timestamp_pools() {
 }
 
 static void create_pipeline_layout() {
-    const VkDescriptorSetLayoutBinding bindings[] = {
-        {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr},
-        {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr},
+    const VkDescriptorSetLayoutBinding frame_bindings[] = {
+        {frame_ubo_binding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr},
+        {frame_lights_binding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr},
+        {frame_env_binding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
+        {frame_brdf_binding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
+    };
+    const VkDescriptorSetLayoutCreateInfo frame_set_ci{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = frame_binding_count,
+        .pBindings = frame_bindings,
+    };
+    vk_check(vkCreateDescriptorSetLayout(g_ctx.device, &frame_set_ci, nullptr, &g_ctx.frame_set_layout));
+
+    const VkDescriptorSetLayoutBinding pass_bindings[] = {
+        {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
+        {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
         {2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
         {3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
-        {4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
-        {5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
-        {6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
-        {7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
-        {8, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_ALL, nullptr},
+        {pass_storage_binding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_ALL, nullptr},
     };
-    const VkDescriptorSetLayoutCreateInfo set_ci{
+    const VkDescriptorSetLayoutCreateInfo pass_set_ci{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = descriptor_binding_count,
-        .pBindings = bindings,
+        .bindingCount = pass_binding_count,
+        .pBindings = pass_bindings,
     };
-    vk_check(vkCreateDescriptorSetLayout(g_ctx.device, &set_ci, nullptr, &g_ctx.descriptor_set_layout));
+    vk_check(vkCreateDescriptorSetLayout(g_ctx.device, &pass_set_ci, nullptr, &g_ctx.pass_set_layout));
 
+    const VkDescriptorSetLayout set_layouts[] = {
+        g_ctx.frame_set_layout,
+        g_ctx.pass_set_layout,
+    };
     const VkPushConstantRange push{
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
         .offset = 0,
@@ -386,8 +400,8 @@ static void create_pipeline_layout() {
     };
     const VkPipelineLayoutCreateInfo layout_ci{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = 1,
-        .pSetLayouts = &g_ctx.descriptor_set_layout,
+        .setLayoutCount = 2,
+        .pSetLayouts = set_layouts,
         .pushConstantRangeCount = 1,
         .pPushConstantRanges = &push,
     };
@@ -518,17 +532,14 @@ static void create_fallback_sampled_texture() {
     vmaDestroyBuffer(g_ctx.allocator, staging_buffer, staging_allocation);
 }
 
-static void create_descriptor_pool(VkDescriptorPool& pool) {
+static void create_pass_descriptor_pool(VkDescriptorPool& pool) {
     static constexpr u32 max_sets_per_frame = 512;
     const VkDescriptorPoolSize pool_sizes[] = {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, max_sets_per_frame},
-        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, max_sets_per_frame},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, max_sets_per_frame * texture_slot_count},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, max_sets_per_frame * pass_texture_slot_count},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, max_sets_per_frame},
     };
     const VkDescriptorPoolCreateInfo pool_ci{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
         .maxSets = max_sets_per_frame,
         .poolSizeCount = u32(std::size(pool_sizes)),
         .pPoolSizes = pool_sizes,
@@ -536,11 +547,74 @@ static void create_descriptor_pool(VkDescriptorPool& pool) {
     vk_check(vkCreateDescriptorPool(g_ctx.device, &pool_ci, nullptr, &pool));
 }
 
+// FIXME: really needed?
+static void create_dummy_frame_buffers() {
+    const auto create_host_buffer = [](VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer& buffer, VmaAllocation& allocation) {
+        const VkBufferCreateInfo buffer_ci{
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = size,
+            .usage = usage,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        };
+        const VmaAllocationCreateInfo alloc_ci{
+            .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+            .usage = VMA_MEMORY_USAGE_AUTO,
+        };
+        VmaAllocationInfo info{};
+        vk_check(vmaCreateBuffer(g_ctx.allocator, &buffer_ci, &alloc_ci, &buffer, &allocation, &info));
+        ALWAYS_ASSERT(info.pMappedData, "Dummy frame buffer is not mapped");
+        std::memset(info.pMappedData, 0, size_t(size));
+    };
+
+    create_host_buffer(
+        sizeof(shader::FrameData),
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        g_ctx.dummy_frame_ubo,
+        g_ctx.dummy_frame_ubo_allocation
+    );
+    create_host_buffer(
+        sizeof(shader::PointLight),
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        g_ctx.dummy_lights_ssbo,
+        g_ctx.dummy_lights_ssbo_allocation
+    );
+}
+
 static void create_descriptor_pools() {
-    for(InFlightFrame& frame : g_ctx.frames) {
-        create_descriptor_pool(frame.descriptor_pool);
+    const VkDescriptorPoolSize frame_pool_sizes[] = {
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, frames_in_flight + 1},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, frames_in_flight + 1},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, (frames_in_flight + 1) * 2},
+    };
+    const VkDescriptorPoolCreateInfo frame_pool_ci{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .maxSets = frames_in_flight + 1,
+        .poolSizeCount = u32(std::size(frame_pool_sizes)),
+        .pPoolSizes = frame_pool_sizes,
+    };
+    vk_check(vkCreateDescriptorPool(g_ctx.device, &frame_pool_ci, nullptr, &g_ctx.frame_descriptor_pool));
+
+    VkDescriptorSetLayout frame_layouts[frames_in_flight + 1];
+    for(u32 i = 0; i != frames_in_flight + 1; ++i) {
+        frame_layouts[i] = g_ctx.frame_set_layout;
     }
-    create_descriptor_pool(g_ctx.immediate_descriptor_pool);
+    const VkDescriptorSetAllocateInfo frame_alloc{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = g_ctx.frame_descriptor_pool,
+        .descriptorSetCount = frames_in_flight + 1,
+        .pSetLayouts = frame_layouts,
+    };
+    VkDescriptorSet frame_sets[frames_in_flight + 1] = {};
+    vk_check(vkAllocateDescriptorSets(g_ctx.device, &frame_alloc, frame_sets));
+    for(u32 i = 0; i != frames_in_flight; ++i) {
+        g_ctx.frames[i].frame_descriptor_set = frame_sets[i];
+    }
+    g_ctx.immediate_frame_descriptor_set = frame_sets[frames_in_flight];
+
+    for(InFlightFrame& frame : g_ctx.frames) {
+        create_pass_descriptor_pool(frame.pass_descriptor_pool);
+    }
+    create_pass_descriptor_pool(g_ctx.immediate_pass_descriptor_pool);
 }
 
 static VkSampler sampler_for_texture(const Texture* texture) {
@@ -591,15 +665,113 @@ static VkDescriptorImageInfo sampled_image_info(u32 slot) {
     };
 }
 
-// Builds one descriptor set from the sticky bound_* state, matching OpenGL's bind-then-draw model.
+static VkDescriptorSet current_frame_descriptor_set() {
+    if(g_ctx.immediate_cmd) {
+        return g_ctx.immediate_frame_descriptor_set;
+    }
+    return g_ctx.frames[g_ctx.frame_index].frame_descriptor_set;
+}
+
+static VkPipelineBindPoint current_bind_point() {
+    return (g_ctx.bound_program && g_ctx.bound_program->is_compute())
+        ? VK_PIPELINE_BIND_POINT_COMPUTE
+        : VK_PIPELINE_BIND_POINT_GRAPHICS;
+}
+
+// Writes sticky frame UBO / lights / env / BRDF into the persistent set for this slot.
+void flush_frame_descriptors() {
+    if(!g_ctx.pipeline_layout || !g_ctx.frame_set_layout) {
+        return;
+    }
+
+    const VkDescriptorSet set = current_frame_descriptor_set();
+    if(!set) {
+        return;
+    }
+
+    const BoundBuffer& ubo = g_ctx.bound_frame_ubo.buffer
+        ? g_ctx.bound_frame_ubo
+        : BoundBuffer{g_ctx.dummy_frame_ubo, sizeof(shader::FrameData)};
+    const BoundBuffer& lights = g_ctx.bound_frame_lights.buffer
+        ? g_ctx.bound_frame_lights
+        : BoundBuffer{g_ctx.dummy_lights_ssbo, sizeof(shader::PointLight)};
+
+    const VkDescriptorBufferInfo ubo_info{
+        .buffer = ubo.buffer,
+        .offset = 0,
+        .range = ubo.size ? ubo.size : VK_WHOLE_SIZE,
+    };
+    const VkDescriptorBufferInfo lights_info{
+        .buffer = lights.buffer,
+        .offset = 0,
+        .range = lights.size ? lights.size : VK_WHOLE_SIZE,
+    };
+
+    // Slots 4–5 are frame textures (env / BRDF); fall back to the 1×1 stub if unbound.
+    const VkDescriptorImageInfo env_info = sampled_image_info(frame_texture_slot_base);
+    const VkDescriptorImageInfo brdf_info = sampled_image_info(frame_texture_slot_base + 1);
+
+    const VkWriteDescriptorSet writes[] = {
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = set,
+            .dstBinding = frame_ubo_binding,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .pBufferInfo = &ubo_info,
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = set,
+            .dstBinding = frame_lights_binding,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .pBufferInfo = &lights_info,
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = set,
+            .dstBinding = frame_env_binding,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &env_info,
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = set,
+            .dstBinding = frame_brdf_binding,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &brdf_info,
+        },
+    };
+    vkUpdateDescriptorSets(g_ctx.device, u32(std::size(writes)), writes, 0, nullptr);
+
+    if(!vk_is_recording()) {
+        return;
+    }
+
+    vkCmdBindDescriptorSets(
+        vk_command_buffer(),
+        current_bind_point(),
+        g_ctx.pipeline_layout,
+        frame_set,
+        1,
+        &set,
+        0,
+        nullptr
+    );
+}
+
+// Builds pass set 1 from sticky material/fullscreen/storage state (still one alloc per draw).
 void flush_descriptor_bindings() {
     VkDescriptorPool pool = VK_NULL_HANDLE;
     if(g_ctx.immediate_cmd) {
-        pool = g_ctx.immediate_descriptor_pool;
+        pool = g_ctx.immediate_pass_descriptor_pool;
     } else if(g_ctx.frame_active) {
-        pool = g_ctx.frames[g_ctx.frame_index].descriptor_pool;
+        pool = g_ctx.frames[g_ctx.frame_index].pass_descriptor_pool;
     }
-    if(!pool || !g_ctx.pipeline_layout) {
+    if(!pool || !g_ctx.pipeline_layout || !g_ctx.pass_set_layout) {
         return;
     }
 
@@ -608,42 +780,20 @@ void flush_descriptor_bindings() {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
         .descriptorPool = pool,
         .descriptorSetCount = 1,
-        .pSetLayouts = &g_ctx.descriptor_set_layout,
+        .pSetLayouts = &g_ctx.pass_set_layout,
     };
     vk_check(vkAllocateDescriptorSets(g_ctx.device, &alloc_ci, &set));
 
-    VkDescriptorBufferInfo buffer_infos[2] = {};
-    VkWriteDescriptorSet writes[descriptor_binding_count] = {};
+    VkWriteDescriptorSet writes[pass_binding_count] = {};
     u32 write_count = 0;
 
-    for(u32 binding = 0; binding < 2; ++binding) {
-        const BoundBuffer& bound = g_ctx.bound_descriptors[binding];
-        if(!bound.buffer) {
-            continue;
-        }
-
-        buffer_infos[binding] = {
-            .buffer = bound.buffer,
-            .offset = 0,
-            .range = bound.size ? bound.size : VK_WHOLE_SIZE,
-        };
-        writes[write_count++] = {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = set,
-            .dstBinding = binding,
-            .descriptorCount = 1,
-            .descriptorType = binding == 0 ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .pBufferInfo = &buffer_infos[binding],
-        };
-    }
-
-    VkDescriptorImageInfo sampled_infos[texture_slot_count] = {};
-    for(u32 slot = 0; slot != texture_slot_count; ++slot) {
+    VkDescriptorImageInfo sampled_infos[pass_texture_slot_count] = {};
+    for(u32 slot = 0; slot != pass_texture_slot_count; ++slot) {
         sampled_infos[slot] = sampled_image_info(slot);
         writes[write_count++] = {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = set,
-            .dstBinding = descriptor_texture_binding_base + slot,
+            .dstBinding = slot,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .pImageInfo = &sampled_infos[slot],
@@ -666,7 +816,7 @@ void flush_descriptor_bindings() {
     writes[write_count++] = {
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet = set,
-        .dstBinding = 8,
+        .dstBinding = pass_storage_binding,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
         .pImageInfo = &storage_info,
@@ -674,15 +824,11 @@ void flush_descriptor_bindings() {
 
     vkUpdateDescriptorSets(g_ctx.device, write_count, writes, 0, nullptr);
 
-    const VkPipelineBindPoint bind_point =
-        (g_ctx.bound_program && g_ctx.bound_program->is_compute())
-            ? VK_PIPELINE_BIND_POINT_COMPUTE
-            : VK_PIPELINE_BIND_POINT_GRAPHICS;
     vkCmdBindDescriptorSets(
         vk_command_buffer(),
-        bind_point,
+        current_bind_point(),
         g_ctx.pipeline_layout,
-        0,
+        pass_set,
         1,
         &set,
         0,
@@ -824,8 +970,8 @@ void defer_destroy(VkShaderModule module) {
 
 void immediate_submit(std::function<void(VkCommandBuffer)>&& record) {
     ALWAYS_ASSERT(g_ctx.immediate_pool && g_ctx.graphics_queue, "immediate_submit called before vk_init");
-    if(g_ctx.immediate_descriptor_pool) {
-        vk_check(vkResetDescriptorPool(g_ctx.device, g_ctx.immediate_descriptor_pool, 0));
+    if(g_ctx.immediate_pass_descriptor_pool) {
+        vk_check(vkResetDescriptorPool(g_ctx.device, g_ctx.immediate_pass_descriptor_pool, 0));
     }
 
     const VkCommandBufferAllocateInfo alloc_ci{
@@ -847,6 +993,9 @@ void immediate_submit(std::function<void(VkCommandBuffer)>&& record) {
     // (the GL-style API) record here instead of into a frame that is not active.
     const VkCommandBuffer prev_immediate = g_ctx.immediate_cmd;
     g_ctx.immediate_cmd = cmd;
+    // Bind persistent set 0 with whatever sticky/dummy frame state we have so
+    // compute pipelines that share the layout are valid even if they only use set 1.
+    flush_frame_descriptors();
     record(cmd);
     g_ctx.immediate_cmd = prev_immediate;
 
@@ -1097,8 +1246,16 @@ void vk_init(GLFWwindow* window) {
     create_immediate_pool();
     create_pipeline_layout();
     create_samplers();
-    create_fallback_sampled_texture();
+    create_dummy_frame_buffers();
     create_descriptor_pools();
+    create_fallback_sampled_texture();
+    // Seed every frame set with dummy buffers + fallback images.
+    flush_frame_descriptors();
+    for(u32 i = 0; i != frames_in_flight; ++i) {
+        g_ctx.frame_index = i;
+        flush_frame_descriptors();
+    }
+    g_ctx.frame_index = 0;
 }
 
 void begin_frame() {
@@ -1123,16 +1280,15 @@ void begin_frame() {
     g_ctx.depth_compare_op = VK_COMPARE_OP_GREATER_OR_EQUAL;
     g_ctx.bound_vertex = {};
     g_ctx.bound_index = {};
-    for(BoundBuffer& bound : g_ctx.bound_descriptors) {
-        bound = {};
-    }
+    g_ctx.bound_frame_ubo = {};
+    g_ctx.bound_frame_lights = {};
     for(BoundSampledTexture& bound : g_ctx.bound_textures) {
         bound = {};
     }
     g_ctx.bound_storage_image = {};
     vk_check(vkWaitForFences(g_ctx.device, 1, &frame.submitted, VK_TRUE, UINT64_MAX));
-    if(frame.descriptor_pool) {
-        vk_check(vkResetDescriptorPool(g_ctx.device, frame.descriptor_pool, 0));
+    if(frame.pass_descriptor_pool) {
+        vk_check(vkResetDescriptorPool(g_ctx.device, frame.pass_descriptor_pool, 0));
     }
     flush_frame_deletions(g_ctx.frame_index);
     reset_timestamp_queries();
@@ -1170,6 +1326,10 @@ void begin_frame() {
     g_ctx.rendering_active = false;
     g_ctx.rendering_to_swapchain = false;
     g_ctx.swapchain_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    // Point set 0 at dummy buffers until Scene::render writes the real frame data.
+    // Avoids leaving the persistent set referencing buffers just freed above.
+    flush_frame_descriptors();
 }
 
 void end_frame() {
@@ -1240,9 +1400,27 @@ void vk_destroy() {
         vkDestroyCommandPool(g_ctx.device, g_ctx.immediate_pool, nullptr);
         g_ctx.immediate_pool = VK_NULL_HANDLE;
     }
-    if(g_ctx.immediate_descriptor_pool) {
-        vkDestroyDescriptorPool(g_ctx.device, g_ctx.immediate_descriptor_pool, nullptr);
-        g_ctx.immediate_descriptor_pool = VK_NULL_HANDLE;
+    if(g_ctx.immediate_pass_descriptor_pool) {
+        vkDestroyDescriptorPool(g_ctx.device, g_ctx.immediate_pass_descriptor_pool, nullptr);
+        g_ctx.immediate_pass_descriptor_pool = VK_NULL_HANDLE;
+    }
+    if(g_ctx.frame_descriptor_pool) {
+        vkDestroyDescriptorPool(g_ctx.device, g_ctx.frame_descriptor_pool, nullptr);
+        g_ctx.frame_descriptor_pool = VK_NULL_HANDLE;
+        for(InFlightFrame& frame : g_ctx.frames) {
+            frame.frame_descriptor_set = VK_NULL_HANDLE;
+        }
+        g_ctx.immediate_frame_descriptor_set = VK_NULL_HANDLE;
+    }
+    if(g_ctx.dummy_frame_ubo) {
+        vmaDestroyBuffer(g_ctx.allocator, g_ctx.dummy_frame_ubo, g_ctx.dummy_frame_ubo_allocation);
+        g_ctx.dummy_frame_ubo = VK_NULL_HANDLE;
+        g_ctx.dummy_frame_ubo_allocation = nullptr;
+    }
+    if(g_ctx.dummy_lights_ssbo) {
+        vmaDestroyBuffer(g_ctx.allocator, g_ctx.dummy_lights_ssbo, g_ctx.dummy_lights_ssbo_allocation);
+        g_ctx.dummy_lights_ssbo = VK_NULL_HANDLE;
+        g_ctx.dummy_lights_ssbo_allocation = nullptr;
     }
     if(g_ctx.fallback_sampled_view) {
         vkDestroyImageView(g_ctx.device, g_ctx.fallback_sampled_view, nullptr);
@@ -1265,9 +1443,13 @@ void vk_destroy() {
         vkDestroyPipelineLayout(g_ctx.device, g_ctx.pipeline_layout, nullptr);
         g_ctx.pipeline_layout = VK_NULL_HANDLE;
     }
-    if(g_ctx.descriptor_set_layout) {
-        vkDestroyDescriptorSetLayout(g_ctx.device, g_ctx.descriptor_set_layout, nullptr);
-        g_ctx.descriptor_set_layout = VK_NULL_HANDLE;
+    if(g_ctx.pass_set_layout) {
+        vkDestroyDescriptorSetLayout(g_ctx.device, g_ctx.pass_set_layout, nullptr);
+        g_ctx.pass_set_layout = VK_NULL_HANDLE;
+    }
+    if(g_ctx.frame_set_layout) {
+        vkDestroyDescriptorSetLayout(g_ctx.device, g_ctx.frame_set_layout, nullptr);
+        g_ctx.frame_set_layout = VK_NULL_HANDLE;
     }
     if(g_ctx.allocator) {
         vmaDestroyAllocator(g_ctx.allocator);

@@ -60,7 +60,7 @@ void Scene::render() const {
     // GPU work is often one frame behind, so ~ByteBuffer enqueues the VkBuffer
     // and the deletion queue frees it after this frame's fence.
 
-    // Fill and bind frame data buffer (descriptor 0: UBO)
+    // Fill and bind frame data buffer (set 0, binding 0: UBO)
     TypedBuffer<shader::FrameData> buffer(nullptr, 1);
     {
         auto mapping = buffer.map(AccessType::WriteOnly);
@@ -72,9 +72,9 @@ void Scene::render() const {
         mapping[0].sun_dir = glm::normalize(_sun_direction);
         mapping[0].ibl_intensity = _ibl_intensity;
     }
-    buffer.bind(BufferUsage::Uniform, 0);
+    buffer.bind(BufferUsage::Uniform, frame_ubo_binding);
 
-    // Fill and bind lights buffer (descriptor 1: SSBO)
+    // Fill and bind lights buffer (set 0, binding 1: SSBO)
     TypedBuffer<shader::PointLight> light_buffer(nullptr, std::max(_point_lights.size(), size_t(1)));
     {
         auto mapping = light_buffer.map(AccessType::WriteOnly);
@@ -88,12 +88,15 @@ void Scene::render() const {
             };
         }
     }
-    light_buffer.bind(BufferUsage::Storage, 1);
+    light_buffer.bind(BufferUsage::Storage, frame_lights_binding);
 
-    // Texture slots 4–5 → descriptor bindings 6–7 (see graphics.cpp)
+    // Texture slots 4–5 → frame set bindings 2–3 (env cubemap / BRDF LUT)
     DEBUG_ASSERT(_envmap && !_envmap->is_null());
-    _envmap->bind(4);
-    brdf_lut().bind(5);
+    _envmap->bind(frame_texture_slot_base);
+    brdf_lut().bind(frame_texture_slot_base + 1);
+
+    // Persistent set 0 — once per scene render, not per draw.
+    flush_frame_descriptors();
 
     // Render the sky
     ctx().vertex_input = VertexLayout::None;

@@ -1,6 +1,6 @@
 import utils;
 
-[[vk::binding(8, 0)]]
+[[vk::binding(4, 1)]]
 RWTexture2D<float2> out_image;
 
 // Monte-Carlo estimate of the split-sum scale (A) and bias (B) terms for a given NdotV and roughness.

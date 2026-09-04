@@ -2,15 +2,14 @@ import structs;
 import utils;
 import lighting;
 
-// Vulkan descriptor slots. Texture slots 0–3 → bindings 2–5;
-// envmap / BRDF LUT (slots 4–5) → bindings 6–7.
+// Set 0 = frame (persistent). Set 1 = pass (material textures).
 [[vk::binding(1, 0)]] StructuredBuffer<PointLight> point_lights;
-[[vk::binding(2, 0)]] Sampler2D in_texture;
-[[vk::binding(3, 0)]] Sampler2D in_normal_texture;
-[[vk::binding(4, 0)]] Sampler2D in_metal_rough;
-[[vk::binding(5, 0)]] Sampler2D in_emissive;
-[[vk::binding(6, 0)]] SamplerCube in_envmap;
-[[vk::binding(7, 0)]] Sampler2D brdf_lut;
+[[vk::binding(2, 0)]] SamplerCube in_envmap;
+[[vk::binding(3, 0)]] Sampler2D brdf_lut;
+[[vk::binding(0, 1)]] Sampler2D in_texture;
+[[vk::binding(1, 1)]] Sampler2D in_normal_texture;
+[[vk::binding(2, 1)]] Sampler2D in_metal_rough;
+[[vk::binding(3, 1)]] Sampler2D in_emissive;
 
 struct FSInput {
     [[vk::location(0)]] float3 normal : NORMAL;

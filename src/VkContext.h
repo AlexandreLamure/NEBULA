@@ -21,10 +21,27 @@ class Program;
 class Texture;
 
 static constexpr u32 frames_in_flight = 2;
-static constexpr u32 descriptor_binding_count = 9;
-// Texture slots 0-5 map to descriptor bindings 2-7 (see graphics.cpp).
+
+// Set 0 — frame (persistent, updated once per Scene::render):
+//   0: frame UBO, 1: lights SSBO, 2: env cubemap, 3: BRDF LUT
+static constexpr u32 frame_set = 0;
+static constexpr u32 frame_binding_count = 4;
+static constexpr u32 frame_ubo_binding = 0;
+static constexpr u32 frame_lights_binding = 1;
+static constexpr u32 frame_env_binding = 2;
+static constexpr u32 frame_brdf_binding = 3;
+
+// Set 1 — pass (allocated per draw/dispatch for now):
+//   0-3: sampled textures, 4: storage image
+static constexpr u32 pass_set = 1;
+static constexpr u32 pass_texture_slot_count = 4;
+static constexpr u32 pass_storage_binding = 4;
+static constexpr u32 pass_binding_count = 5;
+
+// Texture::bind slots: 0-3 → pass set, 4 → env, 5 → BRDF LUT.
 static constexpr u32 texture_slot_count = 6;
-static constexpr u32 descriptor_texture_binding_base = 2;
+static constexpr u32 frame_texture_slot_base = 4;
+
 // Two timestamps per PROFILE_GPU zone (begin + end).
 static constexpr u32 timestamp_queries_per_frame = 1024;
 
@@ -40,7 +57,8 @@ struct InFlightFrame {
     VkCommandBuffer command_buffer = VK_NULL_HANDLE;
     VkFence submitted = VK_NULL_HANDLE;
     VkSemaphore acquire = VK_NULL_HANDLE;
-    VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
+    VkDescriptorPool pass_descriptor_pool = VK_NULL_HANDLE;
+    VkDescriptorSet frame_descriptor_set = VK_NULL_HANDLE;
 };
 
 // Sticky GL-style bind points, flushed into one descriptor set at draw/dispatch time.
@@ -102,9 +120,19 @@ struct GraphicsContext {
 
     std::string device_name;
 
-    VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
+    VkDescriptorSetLayout frame_set_layout = VK_NULL_HANDLE;
+    VkDescriptorSetLayout pass_set_layout = VK_NULL_HANDLE;
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
-    VkDescriptorPool immediate_descriptor_pool = VK_NULL_HANDLE;
+    // Long-lived pool for the per-slot frame sets (not reset each frame).
+    VkDescriptorPool frame_descriptor_pool = VK_NULL_HANDLE;
+    VkDescriptorPool immediate_pass_descriptor_pool = VK_NULL_HANDLE;
+    VkDescriptorSet immediate_frame_descriptor_set = VK_NULL_HANDLE;
+
+    // Safe defaults so set 0 is always writable before Scene::render fills real buffers.
+    VkBuffer dummy_frame_ubo = VK_NULL_HANDLE;
+    VmaAllocation dummy_frame_ubo_allocation = nullptr;
+    VkBuffer dummy_lights_ssbo = VK_NULL_HANDLE;
+    VmaAllocation dummy_lights_ssbo_allocation = nullptr;
 
     VkSampler sampler_repeat = VK_NULL_HANDLE;
     VkSampler sampler_clamp = VK_NULL_HANDLE;
@@ -116,7 +144,8 @@ struct GraphicsContext {
     const Program* bound_program = nullptr;
     BoundBuffer bound_vertex;
     BoundBuffer bound_index;
-    BoundBuffer bound_descriptors[descriptor_binding_count] = {};
+    BoundBuffer bound_frame_ubo;
+    BoundBuffer bound_frame_lights;
     BoundSampledTexture bound_textures[texture_slot_count] = {};
     BoundStorageImage bound_storage_image;
     // Raster state written by Material::bind(), applied after vkCmdBindPipeline
@@ -223,7 +252,11 @@ void defer_destroy(VkShaderModule module);
 void flush_frame_deletions(u32 frame_slot);
 void flush_all_deletions();
 
-// Allocate one descriptor set from the per-frame pool, write bindings, vkCmdBindDescriptorSets.
+// Write sticky frame resources into the current slot's persistent set 0 and bind it.
+void flush_frame_descriptors();
+
+// Allocate one pass descriptor set (set 1) from the per-frame/immediate pool, write
+// material/fullscreen/storage bindings, and bind it.
 void flush_descriptor_bindings();
 
 void dispatch_compute(u32 x, u32 y, u32 z);

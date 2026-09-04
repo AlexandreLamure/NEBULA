@@ -1,7 +1,7 @@
 import structs;
 import utils;
 
-[[vk::binding(6, 0)]] SamplerCube in_envmap;
+[[vk::binding(2, 0)]] SamplerCube in_envmap;
 
 // Unprojects the pixel at a far reverse-Z depth to a view ray, then samples the env cubemap along it.
 [shader("fragment")]
