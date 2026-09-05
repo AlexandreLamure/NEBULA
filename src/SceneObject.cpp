@@ -42,4 +42,12 @@ const glm::mat4& SceneObject::transform() const {
     return _transform;
 }
 
+const Sphere SceneObject::computeBoundingSphereWs() const {
+    const Sphere& boundingSphereMs = _mesh->boundingSphereMs();
+    const glm::vec3 centerWs = transform() * glm::vec4(boundingSphereMs._center, 1.0f);
+    const glm::vec3 scaleWs = glm::vec3(glm::length(transform()[0]), glm::length(transform()[1]), glm::length(transform()[2]));
+    const float radiusWs = boundingSphereMs._radius * std::max(std::max(scaleWs.x, scaleWs.y), scaleWs.z);
+    return Sphere(centerWs, radiusWs);
+}
+
 }

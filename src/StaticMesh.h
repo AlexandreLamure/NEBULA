@@ -4,10 +4,12 @@
 #include <graphics.h>
 #include <TypedBuffer.h>
 #include <Vertex.h>
+#include <geometry.h>
 
 #include <vector>
 
 namespace nebula {
+
 
 struct MeshData {
     std::vector<Vertex> vertices;
@@ -27,9 +29,12 @@ class StaticMesh : NonCopyable {
         VkBuffer indexBuffer() const { return _indexBuffer.vkBuffer(); }
         u32 indexCount() const { return u32(_indexBuffer.elementCount()); }
 
+        const Sphere& boundingSphereMs() const { return _boundingSphereMs; }
+
     private:
         TypedBuffer<Vertex> _vertexBuffer;
         TypedBuffer<u32> _indexBuffer;
+        Sphere _boundingSphereMs;
 };
 
 }

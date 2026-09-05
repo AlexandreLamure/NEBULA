@@ -3,6 +3,7 @@
 
 #include <StaticMesh.h>
 #include <Material.h>
+#include <geometry.h>
 
 #include <memory>
 
@@ -21,6 +22,8 @@ class SceneObject {
 
         void setTransform(const glm::mat4& tr);
         const glm::mat4& transform() const;
+
+        const Sphere computeBoundingSphereWs() const;
 
     private:
         glm::mat4 _transform = glm::mat4(1.0f);

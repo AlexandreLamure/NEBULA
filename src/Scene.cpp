@@ -105,15 +105,21 @@ void Scene::render() const {
         drawFullscreen(_skyMaterial.program(), raster, _skyMaterial.passResources(), push);
     }
 
+    const Frustum frustum = _camera.buildFrustum();
+
     // Opaque first, then transparent.
     for(const SceneObject& obj : _objects) {
         if(obj.material().isOpaque()) {
-            obj.render();
+            if(frustumSphereIntersection(frustum, obj.computeBoundingSphereWs())) {
+                obj.render();
+            }
         }
     }
     for(const SceneObject& obj : _objects) {
         if(!obj.material().isOpaque()) {
-            obj.render();
+            if(frustumSphereIntersection(frustum, obj.computeBoundingSphereWs())) {
+                obj.render();
+            }
         }
     }
 }

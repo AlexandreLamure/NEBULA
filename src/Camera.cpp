@@ -144,6 +144,7 @@ Frustum Camera::buildFrustum() const {
     const glm::vec3 cameraRight = right();
 
     Frustum frustum;
+    frustum._tipPosition = position();
     frustum._nearNormal = cameraForward;
 
     const float halfFov = fov() * 0.5f;
@@ -163,5 +164,4 @@ Frustum Camera::buildFrustum() const {
 
     return frustum;
 }
-
 }

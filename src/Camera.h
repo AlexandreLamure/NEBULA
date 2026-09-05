@@ -4,18 +4,9 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <utils.h>
+#include <geometry.h>
 
 namespace nebula {
-
-struct Frustum {
-    glm::vec3 _nearNormal;
-    // No far plane (zFar is +inf)
-    glm::vec3 _topNormal;
-    glm::vec3 _bottomNormal;
-    glm::vec3 _rightNormal;
-    glm::vec3 _leftNormal;
-};
-
 
 class Camera {
     public:
