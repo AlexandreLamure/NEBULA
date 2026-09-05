@@ -49,6 +49,21 @@ static int uniform_offset(u32 hash) {
     }
 }
 
+void PushConstants::write(u32 name_hash, const void* data, u32 size) {
+    const int off = uniform_offset(name_hash);
+    if(off < 0) {
+        return;
+    }
+    DEBUG_ASSERT(u32(off) + size <= sizeof(PushConstants));
+    std::memcpy(reinterpret_cast<u8*>(this) + off, data, size);
+}
+
+void PushConstants::set(u32 name_hash, const UniformValue& value) {
+    std::visit([&](const auto& v) {
+        write(name_hash, &v, sizeof(v));
+    }, value);
+}
+
 static bool file_exists(const std::string& path) {
     if(FILE* file = std::fopen(path.c_str(), "rb")) {
         std::fclose(file);
@@ -89,11 +104,10 @@ static VkShaderModule create_shader_module(const std::vector<u32>& spirv) {
     return module;
 }
 
-// TODO: make this a bit more implicit
 // Packs blend, vertex layout, and attachment formats into a u32 used to cache pipeline variants.
-static u32 current_pipeline_key() {
-    return u32(ctx().alpha_blend)
-         | (u32(ctx().vertex_input) << 1)
+static u32 pipeline_key(bool alpha_blend, VertexLayout vertex_layout) {
+    return u32(alpha_blend)
+         | (u32(vertex_layout) << 1)
          | (u32(ctx().rendering_color_format) << 4)
          | (u32(ctx().rendering_depth_format) << 16);
 }
@@ -255,7 +269,6 @@ void Program::swap(Program& other) {
     std::swap(_comp_module, other._comp_module);
     std::swap(_compute_pipeline, other._compute_pipeline);
     std::swap(_pipelines, other._pipelines);
-    std::swap(_push, other._push);
     std::swap(_is_compute, other._is_compute);
 }
 
@@ -289,9 +302,6 @@ void Program::load_compute(const std::string& comp) {
 }
 
 void Program::destroy() {
-    if(ctx().bound_program == this) {
-        ctx().bound_program = nullptr;
-    }
     if(!vk_device()) {
         return;
     }
@@ -316,8 +326,8 @@ Program::~Program() {
     destroy();
 }
 
-VkPipeline Program::get_or_create_pipeline() const {
-    const u32 key = current_pipeline_key();
+VkPipeline Program::get_or_create_pipeline(bool alpha_blend, VertexLayout layout) const {
+    const u32 key = pipeline_key(alpha_blend, layout);
     for(const CachedPipeline& cached : _pipelines) {
         if(cached.key == key) {
             return cached.pipeline;
@@ -327,46 +337,43 @@ VkPipeline Program::get_or_create_pipeline() const {
     const VkPipeline pipeline = create_graphics_pipeline(
         _vert_module,
         _frag_module,
-        ctx().alpha_blend,
-        ctx().vertex_input
+        alpha_blend,
+        layout
     );
     _pipelines.push_back({key, pipeline});
     return pipeline;
 }
 
-void Program::bind() const {
-    ctx().bound_program = this;
-
+void Program::bind_graphics(const RasterState& raster, VertexLayout layout, const PushConstants& push) const {
+    DEBUG_ASSERT(!_is_compute);
     if(!vk_is_recording()) {
         return;
     }
 
     const VkCommandBuffer cmd = vk_command_buffer();
-    if(_is_compute) {
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute_pipeline);
-    } else {
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, get_or_create_pipeline());
-        // Dynamic state is undefined after a pipeline bind; re-apply Material's sticky raster state.
-        vkCmdSetCullMode(cmd, ctx().cull_mode);
-        vkCmdSetDepthTestEnable(cmd, ctx().depth_test_enable ? VK_TRUE : VK_FALSE);
-        vkCmdSetDepthCompareOp(cmd, ctx().depth_compare_op);
-    }
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, get_or_create_pipeline(raster.alpha_blend, layout));
+    vkCmdSetCullMode(cmd, raster.cull_mode);
+    vkCmdSetDepthTestEnable(cmd, raster.depth_test_enable ? VK_TRUE : VK_FALSE);
+    vkCmdSetDepthCompareOp(cmd, raster.depth_compare_op);
 
-    flush_push_constants();
+    if(ctx().pipeline_layout) {
+        vkCmdPushConstants(
+            cmd,
+            ctx().pipeline_layout,
+            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
+            0,
+            sizeof(push),
+            &push
+        );
+    }
 }
 
-void Program::flush_push_constants() const {
-    if(!vk_is_recording() || !ctx().pipeline_layout) {
+void Program::bind_compute() const {
+    DEBUG_ASSERT(_is_compute);
+    if(!vk_is_recording()) {
         return;
     }
-    vkCmdPushConstants(
-        vk_command_buffer(),
-        ctx().pipeline_layout,
-        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
-        0,
-        sizeof(_push),
-        &_push
-    );
+    vkCmdBindPipeline(vk_command_buffer(), VK_PIPELINE_BIND_POINT_COMPUTE, _compute_pipeline);
 }
 
 bool Program::is_compute() const {
@@ -395,16 +402,6 @@ std::shared_ptr<Program> Program::from_files(const std::string& vert, const std:
         weak_program = program;
     }
     return program;
-}
-
-// Memcpys the value into the push-constant struct at the hashed field's offset.
-void Program::write_uniform(u32 name_hash, const void* data, u32 size) {
-    const int off = uniform_offset(name_hash);
-    if(off < 0) {
-        return;
-    }
-    DEBUG_ASSERT(u32(off) + size <= sizeof(_push));
-    std::memcpy(reinterpret_cast<u8*>(&_push) + off, data, size);
 }
 
 }

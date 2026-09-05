@@ -594,10 +594,9 @@ static const Texture* default_texture_for_slot(u32 slot) {
     }
 }
 
-static VkDescriptorImageInfo sampled_image_info(u32 slot) {
-    const Texture* texture = g_ctx.bound_textures[slot].texture;
+static VkDescriptorImageInfo sampled_image_info(const Texture* texture, u32 default_slot) {
     if(!texture) {
-        texture = default_texture_for_slot(slot);
+        texture = default_texture_for_slot(default_slot);
     }
 
     VkImageView view = g_ctx.fallback_sampled_view;
@@ -612,14 +611,8 @@ static VkDescriptorImageInfo sampled_image_info(u32 slot) {
     };
 }
 
-static VkPipelineBindPoint current_bind_point() {
-    return (g_ctx.bound_program && g_ctx.bound_program->is_compute())
-        ? VK_PIPELINE_BIND_POINT_COMPUTE
-        : VK_PIPELINE_BIND_POINT_GRAPHICS;
-}
-
-// Writes sticky frame UBO / lights / env / BRDF into the persistent set for this slot.
-void flush_frame_descriptors() {
+// Writes FrameResources into the persistent set for this slot and binds set 0.
+void bind_frame(const FrameResources& frame) {
     if(!g_ctx.pipeline_layout || !g_ctx.frame_set_layout) {
         return;
     }
@@ -629,23 +622,22 @@ void flush_frame_descriptors() {
         return;
     }
 
-    ALWAYS_ASSERT(g_ctx.bound_frame_ubo.buffer, "frame UBO is not bound");
-    ALWAYS_ASSERT(g_ctx.bound_frame_lights.buffer, "frame lights are not bound");
+    ALWAYS_ASSERT(frame.ubo, "frame UBO is missing");
+    ALWAYS_ASSERT(frame.lights, "frame lights are missing");
 
     const VkDescriptorBufferInfo ubo_info{
-        .buffer = g_ctx.bound_frame_ubo.buffer,
+        .buffer = frame.ubo,
         .offset = 0,
-        .range = g_ctx.bound_frame_ubo.size,
+        .range = frame.ubo_size,
     };
     const VkDescriptorBufferInfo lights_info{
-        .buffer = g_ctx.bound_frame_lights.buffer,
+        .buffer = frame.lights,
         .offset = 0,
-        .range = g_ctx.bound_frame_lights.size,
+        .range = frame.lights_size,
     };
 
-    // Slots 4–5 are frame textures (env / BRDF); fall back to the 1×1 stub if unbound.
-    const VkDescriptorImageInfo env_info = sampled_image_info(frame_texture_slot_base);
-    const VkDescriptorImageInfo brdf_info = sampled_image_info(frame_texture_slot_base + 1);
+    const VkDescriptorImageInfo env_info = sampled_image_info(frame.env, 4);
+    const VkDescriptorImageInfo brdf_info = sampled_image_info(frame.brdf, 5);
 
     const VkWriteDescriptorSet writes[] = {
         {
@@ -689,7 +681,7 @@ void flush_frame_descriptors() {
 
     vkCmdBindDescriptorSets(
         vk_command_buffer(),
-        current_bind_point(),
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
         g_ctx.pipeline_layout,
         frame_set,
         1,
@@ -699,11 +691,9 @@ void flush_frame_descriptors() {
     );
 }
 
-// Update descriptor bindings on-the-fly for the next draw/dispatch.
+// Push PassResources into set 1 for the next draw/dispatch.
 // Alternative approach: one persistent set per Material + sort draws by material.
-//  * Pros: bind only when the material changes (less CPU than pushing every draw).
-//  * Cons: set/pool bookkeeping; worthless until the draw list is sorted.
-void flush_descriptor_bindings() {
+void push_pass_descriptors(const PassResources& pass, bool compute) {
     if(!vk_is_recording() || !g_ctx.pipeline_layout || !g_ctx.pass_set_layout) {
         return;
     }
@@ -713,7 +703,7 @@ void flush_descriptor_bindings() {
 
     VkDescriptorImageInfo sampled_infos[pass_texture_slot_count] = {};
     for(u32 slot = 0; slot != pass_texture_slot_count; ++slot) {
-        sampled_infos[slot] = sampled_image_info(slot);
+        sampled_infos[slot] = sampled_image_info(pass.textures[slot], slot);
         writes[write_count++] = {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstBinding = slot,
@@ -724,11 +714,10 @@ void flush_descriptor_bindings() {
     }
 
     VkDescriptorImageInfo storage_info{};
-    const Texture* storage_texture = g_ctx.bound_storage_image.texture;
-    if(storage_texture && storage_texture->vk_storage_view()) {
+    if(pass.storage_image && pass.storage_image->vk_storage_view()) {
         storage_info = {
-            .imageView = storage_texture->vk_storage_view(),
-            .imageLayout = g_ctx.bound_storage_image.layout,
+            .imageView = pass.storage_image->vk_storage_view(),
+            .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
         };
     } else {
         storage_info = {
@@ -746,20 +735,12 @@ void flush_descriptor_bindings() {
 
     vkCmdPushDescriptorSetKHR(
         vk_command_buffer(),
-        current_bind_point(),
+        compute ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS,
         g_ctx.pipeline_layout,
         pass_set,
         write_count,
         writes
     );
-}
-
-void dispatch_compute(u32 x, u32 y, u32 z) {
-    if(!vk_is_recording()) {
-        return;
-    }
-    flush_descriptor_bindings();
-    vkCmdDispatch(vk_command_buffer(), x, y, z);
 }
 
 static void create_immediate_pool() {
@@ -904,7 +885,7 @@ void immediate_submit(std::function<void(VkCommandBuffer)>&& record) {
     };
     vk_check(vkBeginCommandBuffer(cmd, &begin_ci));
 
-    // Install as the current command buffer so Program::bind / dispatch_compute
+    // Install as the current command buffer so bind_graphics / dispatch
     // (the GL-style API) record here instead of into a frame that is not active.
     const VkCommandBuffer prev_immediate = g_ctx.immediate_cmd;
     g_ctx.immediate_cmd = cmd;
@@ -1181,19 +1162,6 @@ void begin_frame() {
     }
 
     InFlightFrame& frame = g_ctx.frames[g_ctx.frame_index];
-    g_ctx.bound_program = nullptr;
-    g_ctx.alpha_blend = false;
-    g_ctx.cull_mode = VK_CULL_MODE_BACK_BIT;
-    g_ctx.depth_test_enable = true;
-    g_ctx.depth_compare_op = VK_COMPARE_OP_GREATER_OR_EQUAL;
-    g_ctx.bound_vertex = {};
-    g_ctx.bound_index = {};
-    g_ctx.bound_frame_ubo = {};
-    g_ctx.bound_frame_lights = {};
-    for(BoundSampledTexture& bound : g_ctx.bound_textures) {
-        bound = {};
-    }
-    g_ctx.bound_storage_image = {};
     vk_check(vkWaitForFences(g_ctx.device, 1, &frame.submitted, VK_TRUE, UINT64_MAX));
     flush_frame_deletions(g_ctx.frame_index);
     reset_timestamp_queries();

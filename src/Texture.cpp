@@ -454,11 +454,11 @@ Texture Texture::cubemap_from_equirec(const Texture& equirec) {
         );
         cube._layout = VK_IMAGE_LAYOUT_GENERAL;
 
-        equirec.bind(0);
-        cube.bind_as_image(1, AccessType::WriteOnly);
+        PassResources pass{};
+        pass.textures[0] = &equirec;
+        pass.storage_image = &cube;
         const std::shared_ptr<Program> equirec_program = Program::from_file("equirec_cube.slang");
-        equirec_program->bind();
-        dispatch_compute(face_size / 8, face_size / 8, 6);
+        dispatch(*equirec_program, pass, face_size / 8, face_size / 8, 6);
 
         texture_barrier(
             cmd,
@@ -548,19 +548,6 @@ void Texture::destroy() {
 
 bool Texture::is_null() const {
     return !_image;
-}
-
-void Texture::bind(u32 index) const {
-    if(index < texture_slot_count) {
-        ctx().bound_textures[index].texture = this;
-    }
-}
-
-// GL imageLoad/Store emulator: the slot is ignored because storage is always pass-set binding 4.
-void Texture::bind_as_image(u32 index, AccessType) {
-    (void)index;
-    _layout = VK_IMAGE_LAYOUT_GENERAL;
-    ctx().bound_storage_image = {this, VK_IMAGE_LAYOUT_GENERAL};
 }
 
 TextureType Texture::texture_type() const {

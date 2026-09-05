@@ -17,8 +17,7 @@ class ByteBuffer : NonCopyable {
         ByteBuffer(const void* data, size_t size);
         ~ByteBuffer();
 
-        void bind(BufferUsage usage) const;
-        void bind(BufferUsage usage, u32 index) const;
+        VkBuffer vk_buffer() const { return _buffer; }
 
         size_t byte_size() const;
 

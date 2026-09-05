@@ -90,7 +90,7 @@ ByteBuffer::ByteBuffer(const void* data, size_t size) : _size(size) {
         upload_via_staging(_buffer, data, size);
     } else {
         // Uniform/storage (and ImGui vertex/index): persistently mapped, written every frame.
-        // Usage is only known at bind(), so allow every bind target this class supports.
+        // Usage is not declared at create time, so allow every bind target this class supports.
         AllocatedBuffer host = create_buffer(
             size,
             VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
@@ -111,29 +111,6 @@ ByteBuffer::~ByteBuffer() {
     _buffer = VK_NULL_HANDLE;
     _allocation = nullptr;
     _mapped = nullptr;
-}
-
-void ByteBuffer::bind(BufferUsage usage) const {
-    if(usage == BufferUsage::Attribute) {
-        ctx().bound_vertex = {_buffer, _size};
-        return;
-    }
-    if(usage == BufferUsage::Index) {
-        ctx().bound_index = {_buffer, _size};
-        return;
-    }
-    bind(usage, 0);
-}
-
-void ByteBuffer::bind(BufferUsage usage, u32 index) const {
-    ALWAYS_ASSERT(usage == BufferUsage::Uniform || usage == BufferUsage::Storage, "Index bind is only available for uniform and storage buffers");
-    if(usage == BufferUsage::Uniform) {
-        ALWAYS_ASSERT(index == frame_ubo_binding, "Uniform buffers bind to the frame UBO slot");
-        ctx().bound_frame_ubo = {_buffer, _size};
-        return;
-    }
-    ALWAYS_ASSERT(index == frame_lights_binding, "Storage buffers bind to the frame lights slot");
-    ctx().bound_frame_lights = {_buffer, _size};
 }
 
 size_t ByteBuffer::byte_size() const {

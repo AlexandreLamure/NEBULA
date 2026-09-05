@@ -54,9 +54,6 @@ class Texture {
 
         bool is_null() const;
 
-        void bind(u32 index) const;
-        void bind_as_image(u32 index, AccessType access);
-
         TextureType texture_type() const;
 
         glm::uvec2 size() const;
@@ -73,8 +70,6 @@ class Texture {
         bool is_cube() const;
 
     private:
-        friend class Program;
-
         void swap(Texture& other);
         void destroy();
 

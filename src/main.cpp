@@ -5,6 +5,7 @@
 
 #include <graphics.h>
 #include <VkContext.h>
+#include <Program.h>
 #include <Scene.h>
 #include <Texture.h>
 #include <RenderPass.h>
@@ -29,22 +30,6 @@ static float exposure = 0.33f;
 
 static std::unique_ptr<Scene> scene;
 static std::shared_ptr<Texture> envmap;
-
-namespace NEBULA {
-extern bool audit_bindings_before_draw;
-}
-
-void parse_args(int argc, char** argv) {
-    for(int i = 1; i < argc; ++i) {
-        const std::string_view arg = argv[i];
-
-        if(arg == "--validate") {
-            NEBULA::audit_bindings_before_draw = true;
-        } else {
-            std::cerr << "Unknown argument \"" << arg << "\"" << std::endl;
-        }
-    }
-}
 
 void glfw_check(bool cond) {
     if(!cond) {
@@ -384,13 +369,9 @@ struct RendererState {
 int main(int argc, char** argv) {
     DEBUG_ASSERT([] { std::cout << "Debug asserts enabled" << std::endl; return true; }());
 
-    parse_args(argc, argv);
-
     glfw_check(glfwInit());
     DEFER(glfwTerminate());
-
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-
     GLFWwindow* window = glfwCreateWindow(1600, 900, "NEBULA", nullptr, nullptr);
     glfw_check(window);
     DEFER(glfwDestroyWindow(window));
@@ -448,11 +429,15 @@ int main(int argc, char** argv) {
 
             // Apply a tonemap as a full screen pass
             RenderPass(nullptr, std::array{&renderer.tone_mapped_texture}, false, true, "Tonemap", [&] {
-                ctx().vertex_input = VertexLayout::None;
-                tonemap_program->bind();
-                tonemap_program->set_uniform(HASH("exposure"), exposure);
-                renderer.lit_hdr_texture.bind(0);
-                draw_full_screen_triangle();
+                PushConstants push;
+                push.set(HASH("exposure"), exposure);
+                PassResources pass{};
+                pass.textures[0] = &renderer.lit_hdr_texture;
+                const RasterState raster{
+                    .depth_test_enable = false,
+                    .cull_mode = VK_CULL_MODE_NONE,
+                };
+                draw_fullscreen(*tonemap_program, raster, pass, push);
             });
 
             RenderPass(RenderPass::Swapchain{}, false, "Blit", [&] {

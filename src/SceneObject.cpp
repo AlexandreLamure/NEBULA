@@ -1,6 +1,6 @@
 #include "SceneObject.h"
 
-#include "VkContext.h"
+#include "graphics.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -16,10 +16,17 @@ void SceneObject::render() const {
         return;
     }
 
-    _material->set_uniform(HASH("model"), transform());
-    ctx().vertex_input = VertexLayout::Mesh;
-    _material->bind();
-    _mesh->draw();
+    PushConstants push = _material->build_push_constants();
+    push.set(HASH("model"), transform());
+    draw_mesh(
+        _material->program(),
+        _material->raster_state(),
+        _material->pass_resources(),
+        push,
+        _mesh->vertex_buffer(),
+        _mesh->index_buffer(),
+        _mesh->index_count()
+    );
 }
 
 const Material& SceneObject::material() const {

@@ -38,10 +38,6 @@ static constexpr u32 pass_texture_slot_count = 4;
 static constexpr u32 pass_storage_binding = 4;
 static constexpr u32 pass_binding_count = 5;
 
-// Texture::bind slots: 0-3 → pass set, 4 → env, 5 → BRDF LUT.
-static constexpr u32 texture_slot_count = 6;
-static constexpr u32 frame_texture_slot_base = 4;
-
 // Two timestamps per PROFILE_GPU zone (begin + end).
 static constexpr u32 timestamp_queries_per_frame = 1024;
 
@@ -60,19 +56,28 @@ struct InFlightFrame {
     VkDescriptorSet frame_descriptor_set = VK_NULL_HANDLE;
 };
 
-// Sticky GL-style bind points, flushed into one descriptor set at draw/dispatch time.
-struct BoundBuffer {
-    VkBuffer buffer = VK_NULL_HANDLE;
-    VkDeviceSize size = 0;
+// Explicit per-draw raster intent (depth/cull are dynamic; blend selects a pipeline variant).
+struct RasterState {
+    bool alpha_blend = false;
+    bool depth_test_enable = true;
+    VkCompareOp depth_compare_op = VK_COMPARE_OP_GREATER_OR_EQUAL;
+    VkCullModeFlags cull_mode = VK_CULL_MODE_BACK_BIT;
 };
 
-struct BoundSampledTexture {
-    const Texture* texture = nullptr;
+// Set 1 resources pushed each draw/dispatch.
+struct PassResources {
+    const Texture* textures[pass_texture_slot_count] = {};
+    const Texture* storage_image = nullptr;
 };
 
-struct BoundStorageImage {
-    const Texture* texture = nullptr;
-    VkImageLayout layout = VK_IMAGE_LAYOUT_GENERAL;
+// Set 0 resources updated once per Scene::render.
+struct FrameResources {
+    VkBuffer ubo = VK_NULL_HANDLE;
+    VkDeviceSize ubo_size = 0;
+    VkBuffer lights = VK_NULL_HANDLE;
+    VkDeviceSize lights_size = 0;
+    const Texture* env = nullptr;
+    const Texture* brdf = nullptr;
 };
 
 // GPU work is often one frame behind the CPU. Destroying a VkBuffer at the end of
@@ -130,21 +135,7 @@ struct GraphicsContext {
     VmaAllocation fallback_sampled_allocation = nullptr;
     VkImageView fallback_sampled_view = VK_NULL_HANDLE;
 
-    // FIXME: ugly state machine like OpenGL.
-    const Program* bound_program = nullptr;
-    BoundBuffer bound_vertex;
-    BoundBuffer bound_index;
-    BoundBuffer bound_frame_ubo;
-    BoundBuffer bound_frame_lights;
-    BoundSampledTexture bound_textures[texture_slot_count] = {};
-    BoundStorageImage bound_storage_image;
-    // Raster state written by Material::bind(), applied after vkCmdBindPipeline
-    // (blend is baked into the pipeline; depth/cull are Vulkan 1.3 dynamic state).
-    bool alpha_blend = false;
-    bool depth_test_enable = true;
-    VkCompareOp depth_compare_op = VK_COMPARE_OP_GREATER_OR_EQUAL;
-    VkCullModeFlags cull_mode = VK_CULL_MODE_BACK_BIT;
-    VertexLayout vertex_input = VertexLayout::Mesh;
+    // Attachment formats for the active RenderPass (pipeline variant key).
     VkFormat rendering_color_format = VK_FORMAT_B8G8R8A8_SRGB;
     VkFormat rendering_depth_format = VK_FORMAT_UNDEFINED;
 
@@ -242,13 +233,11 @@ void defer_destroy(VkShaderModule module);
 void flush_frame_deletions(u32 frame_slot);
 void flush_all_deletions();
 
-// Write sticky frame resources into the current slot's persistent set 0 and bind it.
-void flush_frame_descriptors();
+// Update persistent set 0 from FrameResources and bind it (graphics bind point).
+void bind_frame(const FrameResources& frame);
 
-// Push sticky pass textures/storage into set 1 for the next draw/dispatch.
-void flush_descriptor_bindings();
-
-void dispatch_compute(u32 x, u32 y, u32 z);
+// Push set 1 from PassResources for the next draw/dispatch.
+void push_pass_descriptors(const PassResources& pass, bool compute);
 
 // Fence for this frame slot has been waited: copy timestamps into queued PROFILE_GPU
 // markers, then vkResetQueryPool so the slot can be recorded again.

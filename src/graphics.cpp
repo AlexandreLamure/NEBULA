@@ -17,7 +17,6 @@ namespace NEBULA {
 // Descriptor sets:
 //   Set 0 (frame, persistent): frame UBO, lights SSBO, env cubemap, BRDF LUT
 //   Set 1 (pass, per-draw with push descriptors): texture slots 0-3 + storage image
-// Texture::bind slots 0-3 → pass set; slots 4-5 → frame set (env / BRDF).
 
 Texture brdf_lut_texture;
 
@@ -27,8 +26,6 @@ struct {
     std::shared_ptr<Texture> normal;
     std::shared_ptr<Texture> metal_rough;
 } default_textures;
-
-bool audit_bindings_before_draw = false;
 
 void init_graphics(GLFWwindow* window) {
     vk_init(window);
@@ -54,9 +51,9 @@ void init_graphics(GLFWwindow* window) {
             );
             brdf_lut_texture.set_vk_layout(VK_IMAGE_LAYOUT_GENERAL);
 
-            brdf_program->bind();
-            brdf_lut_texture.bind_as_image(0, AccessType::WriteOnly);
-            dispatch_compute(brdf_lut_texture.size().x / 8, brdf_lut_texture.size().y / 8, 1);
+            PassResources pass{};
+            pass.storage_image = &brdf_lut_texture;
+            dispatch(*brdf_program, pass, brdf_lut_texture.size().x / 8, brdf_lut_texture.size().y / 8, 1);
 
             image_barrier(
                 cmd,
@@ -118,29 +115,86 @@ const Texture& brdf_lut() {
     return brdf_lut_texture;
 }
 
+void draw_mesh(
+    const Program& program,
+    const RasterState& raster,
+    const PassResources& pass,
+    const PushConstants& push,
+    VkBuffer vbo,
+    VkBuffer ibo,
+    u32 index_count
+) {
+    draw_indexed(
+        program,
+        VertexLayout::Mesh,
+        raster,
+        pass,
+        push,
+        vbo,
+        ibo,
+        index_count,
+        0,
+        0,
+        VK_INDEX_TYPE_UINT32
+    );
+}
 
-void draw_full_screen_triangle() {
-    if(audit_bindings_before_draw) {
-        audit_bindings();
-    }
+void draw_fullscreen(
+    const Program& program,
+    const RasterState& raster,
+    const PassResources& pass,
+    const PushConstants& push
+) {
+    ALWAYS_ASSERT(ctx().rendering_active, "No active rendering pass");
 
-    // Fullscreen passes skip Material::bind; keep raster state explicit.
-    ctx().cull_mode = VK_CULL_MODE_NONE;
-    ctx().depth_test_enable = false;
-    ctx().vertex_input = VertexLayout::None;
-    if(ctx().bound_program) {
-        ctx().bound_program->bind();
-        ctx().bound_program->flush_push_constants();
-    }
+    program.bind_graphics(raster, VertexLayout::None, push);
+    push_pass_descriptors(pass, false);
 
-    flush_descriptor_bindings();
-
-    if(!ctx().frame_active) {
+    if(!ctx().frame_active && !ctx().immediate_cmd) {
         return;
     }
 
     // No vertex buffer: screen.slang uses SV_VertexID.
     vkCmdDraw(vk_command_buffer(), 3, 1, 0, 0);
+}
+
+void draw_indexed(
+    const Program& program,
+    VertexLayout layout,
+    const RasterState& raster,
+    const PassResources& pass,
+    const PushConstants& push,
+    VkBuffer vbo,
+    VkBuffer ibo,
+    u32 index_count,
+    u32 first_index,
+    i32 vertex_offset,
+    VkIndexType index_type
+) {
+    ALWAYS_ASSERT(ctx().rendering_active, "No active rendering pass");
+    ALWAYS_ASSERT(vbo && ibo, "Vertex/index buffers required");
+
+    program.bind_graphics(raster, layout, push);
+    push_pass_descriptors(pass, false);
+
+    if(!ctx().frame_active && !ctx().immediate_cmd) {
+        return;
+    }
+
+    const VkCommandBuffer cmd = vk_command_buffer();
+    const VkDeviceSize offset = 0;
+    vkCmdBindVertexBuffers(cmd, 0, 1, &vbo, &offset);
+    vkCmdBindIndexBuffer(cmd, ibo, 0, index_type);
+    vkCmdDrawIndexed(cmd, index_count, 1, first_index, vertex_offset, 0);
+}
+
+void dispatch(const Program& program, const PassResources& pass, u32 x, u32 y, u32 z) {
+    if(!vk_is_recording()) {
+        return;
+    }
+    program.bind_compute();
+    push_pass_descriptors(pass, true);
+    vkCmdDispatch(vk_command_buffer(), x, y, z);
 }
 
 void blit_to_screen(const Texture& tex) {
@@ -149,9 +203,13 @@ void blit_to_screen(const Texture& tex) {
                   "blit_to_screen requires an active swapchain RenderPass");
 
     const std::shared_ptr<Program> blit_program = Program::from_files("screen.slang", "passthrough.slang");
-    blit_program->bind();
-    tex.bind(0);
-    draw_full_screen_triangle();
+    PassResources pass{};
+    pass.textures[0] = &tex;
+    const RasterState raster{
+        .depth_test_enable = false,
+        .cull_mode = VK_CULL_MODE_NONE,
+    };
+    draw_fullscreen(*blit_program, raster, pass, {});
 }
 
 std::shared_ptr<Texture> default_black_texture() {
@@ -168,40 +226,6 @@ std::shared_ptr<Texture> default_normal_texture() {
 
 std::shared_ptr<Texture> default_metal_rough_texture() {
     return default_textures.metal_rough;
-}
-
-
-
-
-
-void audit_bindings() {
-    ALWAYS_ASSERT(ctx().bound_program, "No pipeline bound (call Program::bind before drawing)");
-    ALWAYS_ASSERT(ctx().rendering_active, "No active rendering pass (create a RenderPass first)");
-
-    if(ctx().vertex_input == VertexLayout::Mesh) {
-        ALWAYS_ASSERT(ctx().bound_vertex.buffer, "No vertex buffer bound");
-        ALWAYS_ASSERT(ctx().bound_index.buffer, "No index buffer bound");
-    }
-
-    if(ctx().bound_frame_ubo.buffer) {
-        ALWAYS_ASSERT(ctx().bound_frame_ubo.size > 0, "Bound frame UBO has zero size");
-    }
-    if(ctx().bound_frame_lights.buffer) {
-        ALWAYS_ASSERT(ctx().bound_frame_lights.size > 0, "Bound frame lights SSBO has zero size");
-    }
-
-    for(const BoundSampledTexture& bound : ctx().bound_textures) {
-        if(bound.texture) {
-            ALWAYS_ASSERT(bound.texture->vk_view(), "Bound texture has no image view");
-        }
-    }
-
-    if(ctx().bound_storage_image.texture) {
-        ALWAYS_ASSERT(
-            ctx().bound_storage_image.texture->vk_storage_view(),
-            "Bound storage image has no storage view"
-        );
-    }
 }
 
 }

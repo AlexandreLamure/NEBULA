@@ -23,7 +23,9 @@ class StaticMesh : NonCopyable {
 
         StaticMesh(const MeshData& data);
 
-        void draw() const;
+        VkBuffer vertex_buffer() const { return _vertex_buffer.vk_buffer(); }
+        VkBuffer index_buffer() const { return _index_buffer.vk_buffer(); }
+        u32 index_count() const { return u32(_index_buffer.element_count()); }
 
     private:
         TypedBuffer<Vertex> _vertex_buffer;

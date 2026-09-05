@@ -18,19 +18,6 @@
 
 namespace NEBULA {
 
-// CPU mirror of the Slang `PushConstants` struct in structs.slang.
-// `set_uniform` writes here; `vkCmdPushConstants` uploads the blob at bind/draw.
-struct PushConstants {
-    glm::mat4 model = glm::mat4(1.0f);
-    glm::vec3 base_color_factor = glm::vec3(1.0f);
-    float alpha_cutoff = 0.0f;
-    glm::vec2 metal_rough_factor = glm::vec2(1.0f);
-    glm::vec2 viewport_size = {};
-    glm::vec3 emissive_factor = {};
-    float intensity = 1.0f;
-    float exposure = 1.0f;
-};
-
 using UniformValue = std::variant<
     u32,
     float,
@@ -41,6 +28,27 @@ using UniformValue = std::variant<
     glm::mat3,
     glm::mat4
 >;
+
+// CPU mirror of the Slang `PushConstants` struct in structs.slang.
+struct PushConstants {
+    glm::mat4 model = glm::mat4(1.0f);
+    glm::vec3 base_color_factor = glm::vec3(1.0f);
+    float alpha_cutoff = 0.0f;
+    glm::vec2 metal_rough_factor = glm::vec2(1.0f);
+    glm::vec2 viewport_size = {};
+    glm::vec3 emissive_factor = {};
+    float intensity = 1.0f;
+    float exposure = 1.0f;
+
+    void set(u32 name_hash, const UniformValue& value);
+    template<typename T>
+    void set(u32 name_hash, const T& value) {
+        write(name_hash, &value, sizeof(value));
+    }
+
+    private:
+        void write(u32 name_hash, const void* data, u32 size);
+};
 
 class Program : NonCopyable {
 
@@ -53,23 +61,14 @@ class Program : NonCopyable {
         Program(const std::string& comp);
         ~Program();
 
-        void bind() const;
-        void flush_push_constants() const;
+        // Bind graphics pipeline variant + dynamic raster state + push constants.
+        void bind_graphics(const RasterState& raster, VertexLayout layout, const PushConstants& push) const;
+        void bind_compute() const;
 
         bool is_compute() const;
 
         static std::shared_ptr<Program> from_file(const std::string& comp);
         static std::shared_ptr<Program> from_files(const std::string& vert, const std::string& frag);
-
-        void set_uniform(u32 name_hash, const UniformValue& value) {
-            std::visit([&](const auto& v) {
-                write_uniform(name_hash, &v, sizeof(v));
-            }, value);
-        }
-        template<typename T>
-        void set_uniform(u32 name_hash, const T& value) {
-            write_uniform(name_hash, &value, sizeof(value));
-        }
 
     private:
         void swap(Program& other);
@@ -78,8 +77,7 @@ class Program : NonCopyable {
         void load_graphics(const std::string& vert, const std::string& frag);
         void load_compute(const std::string& comp);
 
-        VkPipeline get_or_create_pipeline() const;
-        void write_uniform(u32 name_hash, const void* data, u32 size);
+        VkPipeline get_or_create_pipeline(bool alpha_blend, VertexLayout layout) const;
 
         VkShaderModule _vert_module = VK_NULL_HANDLE;
         VkShaderModule _frag_module = VK_NULL_HANDLE;
@@ -92,7 +90,6 @@ class Program : NonCopyable {
         };
         mutable std::vector<CachedPipeline> _pipelines;
 
-        PushConstants _push;
         bool _is_compute = false;
 
 };

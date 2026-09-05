@@ -1,7 +1,5 @@
 #include "Material.h"
 
-#include "VkContext.h"
-
 #include <algorithm>
 
 namespace NEBULA {
@@ -47,49 +45,57 @@ void Material::set_stored_uniform(u32 name_hash, UniformValue value) {
     _uniforms.emplace_back(name_hash, std::move(value));
 }
 
-// Material::bind() = OpenGL-style sticky intent (blend, depth, cull, textures, uniforms)
-// Program::bind() = bind pipeline, then vkCmdSetCullMode / DepthTestEnable / DepthCompareOp from that intent
-// TODO: change that OpenGL styicky state machine to a more Vulkan-like approach.
-void Material::bind() const {
-    GraphicsContext& c = ctx();
+const Program& Material::program() const {
+    DEBUG_ASSERT(_program);
+    return *_program;
+}
 
-    // Blend is not dynamic in Vulkan 1.3: Program picks a pipeline variant from this flag.
-    c.alpha_blend = (_blend_mode == BlendMode::Alpha);
-
-    // Depth/cull *are* dynamic. Program::bind() issues the vkCmdSet* after the pipeline is bound.
-    c.cull_mode = _double_sided ? VK_CULL_MODE_NONE : VK_CULL_MODE_BACK_BIT;
+RasterState Material::raster_state() const {
+    RasterState raster;
+    raster.alpha_blend = (_blend_mode == BlendMode::Alpha);
+    raster.cull_mode = _double_sided ? VK_CULL_MODE_NONE : VK_CULL_MODE_BACK_BIT;
 
     switch(_depth_test_mode) {
         case DepthTestMode::None:
-            c.depth_test_enable = false;
-        break;
+            raster.depth_test_enable = false;
+            break;
 
         case DepthTestMode::Equal:
-            c.depth_test_enable = true;
-            c.depth_compare_op = VK_COMPARE_OP_EQUAL;
-        break;
+            raster.depth_test_enable = true;
+            raster.depth_compare_op = VK_COMPARE_OP_EQUAL;
+            break;
 
         case DepthTestMode::Standard:
-            c.depth_test_enable = true;
+            raster.depth_test_enable = true;
             // Reverse-Z: nearer fragments have *greater* depth.
-            c.depth_compare_op = VK_COMPARE_OP_GREATER_OR_EQUAL;
-        break;
+            raster.depth_compare_op = VK_COMPARE_OP_GREATER_OR_EQUAL;
+            break;
 
         case DepthTestMode::Reversed:
-            c.depth_test_enable = true;
-            c.depth_compare_op = VK_COMPARE_OP_LESS_OR_EQUAL;
-        break;
+            raster.depth_test_enable = true;
+            raster.depth_compare_op = VK_COMPARE_OP_LESS_OR_EQUAL;
+            break;
     }
 
-    for(const auto& texture : _textures) {
-        texture.second->bind(texture.first);
-    }
+    return raster;
+}
 
+PassResources Material::pass_resources() const {
+    PassResources pass{};
+    for(const auto& [slot, tex] : _textures) {
+        if(slot < pass_texture_slot_count && tex) {
+            pass.textures[slot] = tex.get();
+        }
+    }
+    return pass;
+}
+
+PushConstants Material::build_push_constants() const {
+    PushConstants push;
     for(const auto& [h, v] : _uniforms) {
-        _program->set_uniform(h, v);
+        push.set(h, v);
     }
-
-    _program->bind();
+    return push;
 }
 
 Material Material::textured_pbr_material(bool alpha_test) {
@@ -105,6 +111,5 @@ Material Material::textured_pbr_material(bool alpha_test) {
 
     return material;
 }
-
 
 }

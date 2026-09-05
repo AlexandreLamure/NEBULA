@@ -265,9 +265,9 @@ void ImGuiRenderer::render(const ImDrawData* draw_data) {
     const ImVec2 clip_off = draw_data->DisplayPos;
     const ImVec2 clip_scale = draw_data->FramebufferScale;
 
-    ctx().vertex_input = VertexLayout::ImGui;
-    _material.set_uniform(HASH("viewport_size"), glm::vec2(draw_data->DisplaySize.x, draw_data->DisplaySize.y));
-    _material.bind();
+    PushConstants push = _material.build_push_constants();
+    push.set(HASH("viewport_size"), glm::vec2(draw_data->DisplaySize.x, draw_data->DisplaySize.y));
+    const RasterState raster = _material.raster_state();
 
     TypedBuffer<ImDrawIdx> index_buffer(nullptr, draw_data->TotalIdxCount);
     TypedBuffer<ImDrawVert> vertex_buffer(nullptr, draw_data->TotalVtxCount);
@@ -287,18 +287,10 @@ void ImGuiRenderer::render(const ImDrawData* draw_data) {
         }
     }
 
-    index_buffer.bind(BufferUsage::Index);
-    vertex_buffer.bind(BufferUsage::Attribute);
-
+    const VkBuffer vbo = vertex_buffer.vk_buffer();
+    const VkBuffer ibo = index_buffer.vk_buffer();
+    const VkIndexType index_type = sizeof(ImDrawIdx) == 2 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
     const VkCommandBuffer cmd_buf = vk_command_buffer();
-    const VkDeviceSize vtx_offset = 0;
-    vkCmdBindVertexBuffers(cmd_buf, 0, 1, &ctx().bound_vertex.buffer, &vtx_offset);
-    vkCmdBindIndexBuffer(
-        cmd_buf,
-        ctx().bound_index.buffer,
-        0,
-        sizeof(ImDrawIdx) == 2 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32
-    );
 
     u32 idx_base = 0;
     i32 vtx_base = 0;
@@ -332,19 +324,23 @@ void ImGuiRenderer::render(const ImDrawData* draw_data) {
             };
             vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
 
+            PassResources pass{};
             if(Texture* tex = static_cast<Texture*>(cmd.TextureId)) {
-                tex->bind(0);
+                pass.textures[0] = tex;
             }
 
-            flush_descriptor_bindings();
-
-            vkCmdDrawIndexed(
-                cmd_buf,
+            draw_indexed(
+                _material.program(),
+                VertexLayout::ImGui,
+                raster,
+                pass,
+                push,
+                vbo,
+                ibo,
                 cmd.ElemCount,
-                1,
                 idx_base + cmd.IdxOffset,
                 vtx_base + i32(cmd.VtxOffset),
-                0
+                index_type
             );
         }
 

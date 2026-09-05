@@ -34,16 +34,12 @@ class Material {
 
         bool is_opaque() const;
 
-        // Uniform will be stored inside the material and reset every time its bound
         void set_stored_uniform(u32 name_hash, UniformValue value);
 
-        // Uniform is set immediately and might get overriden by 'set_uniform' called on OTHER materials
-        template<typename... Args>
-        void set_uniform(Args&&... args) const {
-            _program->set_uniform(FWD(args)...);
-        }
-
-        void bind() const;
+        const Program& program() const;
+        RasterState raster_state() const;
+        PassResources pass_resources() const;
+        PushConstants build_push_constants() const;
 
         static Material textured_pbr_material(bool alpha_test = false);
 
