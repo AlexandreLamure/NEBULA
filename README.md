@@ -1,4 +1,4 @@
-# NEBULA
+# nebula
 My personal graphics engine.
 
 ### How to build

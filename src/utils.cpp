@@ -11,7 +11,7 @@
 #include <windows.h>
 #endif
 
-namespace NEBULA {
+namespace nebula {
 
 #ifdef OS_WIN
 bool running_in_debugger() {

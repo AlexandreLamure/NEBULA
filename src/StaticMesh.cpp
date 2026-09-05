@@ -1,6 +1,6 @@
 #include "StaticMesh.h"
 
-namespace NEBULA {
+namespace nebula {
 
 StaticMesh::StaticMesh(const MeshData& data) :
     _vertex_buffer(data.vertices),

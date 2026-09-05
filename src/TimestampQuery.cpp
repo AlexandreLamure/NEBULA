@@ -9,7 +9,7 @@
 
 #include <volk.h>
 
-namespace NEBULA {
+namespace nebula {
 
 namespace profile {
     struct Marker {

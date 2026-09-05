@@ -5,7 +5,7 @@
 
 #include <utils.h>
 
-namespace NEBULA {
+namespace nebula {
 
 struct Frustum {
     glm::vec3 _near_normal;

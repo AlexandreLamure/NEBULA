@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace NEBULA {
+namespace nebula {
 
 static_assert(offsetof(PushConstants, model) == 0);
 static_assert(offsetof(PushConstants, base_color_factor) == 64);

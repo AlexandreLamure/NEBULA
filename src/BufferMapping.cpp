@@ -1,6 +1,6 @@
 #include "BufferMapping.h"
 
-namespace NEBULA {
+namespace nebula {
 
 BufferMappingBase::BufferMappingBase(BufferMappingBase&& other) {
     swap(other);

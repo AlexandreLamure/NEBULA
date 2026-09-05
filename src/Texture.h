@@ -13,7 +13,7 @@
 #include <memory>
 
 
-namespace NEBULA {
+namespace nebula {
 
 struct TextureData {
     std::unique_ptr<u8[]> data;

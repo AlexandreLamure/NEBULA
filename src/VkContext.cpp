@@ -16,7 +16,7 @@
 #include <iostream>
 #include <vector>
 
-namespace NEBULA {
+namespace nebula {
 
 // Singleton containing the Vulkan context.
 static GraphicsContext g_ctx;
@@ -1026,7 +1026,7 @@ void vk_init(GLFWwindow* window) {
 
     const VkApplicationInfo app_info{
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-        .pApplicationName = "NEBULA",
+        .pApplicationName = "nebula",
         .apiVersion = VK_API_VERSION_1_3,
     };
 

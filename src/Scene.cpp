@@ -5,7 +5,7 @@
 
 #include <shader_structs.h>
 
-namespace NEBULA {
+namespace nebula {
 
 Scene::Scene() {
     _sky_material.set_program(Program::from_files("screen.slang", "sky.slang"));

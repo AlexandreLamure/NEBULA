@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-namespace NEBULA {
+namespace nebula {
 
 struct AllocatedBuffer {
     VkBuffer buffer = VK_NULL_HANDLE;

@@ -8,7 +8,7 @@
 
 #include <glm/matrix.hpp>
 
-namespace NEBULA {
+namespace nebula {
 
 class SceneObject {
 

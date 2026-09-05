@@ -9,12 +9,12 @@
 #include <array>
 
 #define FWD(var) std::forward<decltype(var)>(var)
-#define HASH(str) ([] { static constexpr u32 result = ::NEBULA::str_hash(str); return result; }())
+#define HASH(str) ([] { static constexpr u32 result = ::nebula::str_hash(str); return result; }())
 
 // Execute expr at scope exit
-#define DEFER(expr) auto CREATE_UNIQUE_NAME_WITH_PREFIX(defer) = ::NEBULA::ScopeGuard([&] { expr; })
+#define DEFER(expr) auto CREATE_UNIQUE_NAME_WITH_PREFIX(defer) = ::nebula::ScopeGuard([&] { expr; })
 // Print message and terminate immediatly
-#define FATAL(msg) ::NEBULA::fatal((msg), __FILE__, __LINE__)
+#define FATAL(msg) ::nebula::fatal((msg), __FILE__, __LINE__)
 // Assert in debug and release
 #define ALWAYS_ASSERT(cond, msg) do { if(!(cond)) { FATAL(msg); } } while(false)
 
@@ -26,7 +26,7 @@
 #define DEBUG_ASSERT(cond) ALWAYS_ASSERT(cond, "Assert failed: " #cond)
 #endif
 
-namespace NEBULA {
+namespace nebula {
 
 #ifdef OS_WIN
 bool running_in_debugger();

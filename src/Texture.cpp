@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <cstring>
 
-namespace NEBULA {
+namespace nebula {
 
 Result<TextureData> TextureData::from_file(const std::string& file) {
     int width = 0;

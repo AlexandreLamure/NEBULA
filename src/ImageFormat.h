@@ -5,7 +5,7 @@
 
 #include <volk.h>
 
-namespace NEBULA {
+namespace nebula {
 
 enum class ImageFormat {
     RGBA8_UNORM,

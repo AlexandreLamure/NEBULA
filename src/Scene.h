@@ -8,7 +8,7 @@
 #include <vector>
 #include <memory>
 
-namespace NEBULA {
+namespace nebula {
 
 class Scene : NonMovable {
 

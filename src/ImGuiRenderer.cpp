@@ -19,7 +19,7 @@
 #include <imgui/fa-solid-900.h>
 
 
-namespace NEBULA {
+namespace nebula {
 
 static ImGuiMouseButton button_to_imgui(int button) {
     switch(button) {

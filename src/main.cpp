@@ -18,7 +18,7 @@
 #include <vector>
 #include <filesystem>
 
-using namespace NEBULA;
+using namespace nebula;
 
 
 static float delta_time = 0.0f;
@@ -371,7 +371,7 @@ int main() {
     glfw_check(glfwInit());
     DEFER(glfwTerminate());
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    GLFWwindow* window = glfwCreateWindow(1600, 900, "NEBULA", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(1600, 900, "nebula", nullptr, nullptr);
     glfw_check(window);
     DEFER(glfwDestroyWindow(window));
 

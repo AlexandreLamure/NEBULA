@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace NEBULA {
+namespace nebula {
 
 Material::Material() {
 }

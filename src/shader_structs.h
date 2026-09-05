@@ -8,7 +8,7 @@
 
 #include <cstddef>
 
-namespace NEBULA {
+namespace nebula {
 namespace shader {
 
 // CPU copies of the GPU structs in shaders/structs.slang.

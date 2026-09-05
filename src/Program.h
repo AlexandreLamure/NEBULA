@@ -16,7 +16,7 @@
 #include <vector>
 #include <variant>
 
-namespace NEBULA {
+namespace nebula {
 
 using UniformValue = std::variant<
     u32,

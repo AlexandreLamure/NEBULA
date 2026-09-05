@@ -7,7 +7,7 @@
 #include <memory>
 #include <vector>
 
-namespace NEBULA {
+namespace nebula {
 
 enum class BlendMode {
     None,

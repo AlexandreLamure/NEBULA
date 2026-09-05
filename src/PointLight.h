@@ -5,7 +5,7 @@
 
 #include <glm/vec3.hpp>
 
-namespace NEBULA {
+namespace nebula {
 
 class PointLight {
 

@@ -5,7 +5,7 @@
 
 #include <vector>
 
-namespace NEBULA {
+namespace nebula {
 
 template<typename T>
 class TypedBuffer : public ByteBuffer {

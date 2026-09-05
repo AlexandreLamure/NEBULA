@@ -21,7 +21,7 @@
 #pragma GCC diagnostic pop
 #endif
 
-namespace NEBULA {
+namespace nebula {
 
 bool display_gltf_loading_warnings = false;
 

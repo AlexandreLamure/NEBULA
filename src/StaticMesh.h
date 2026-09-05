@@ -7,7 +7,7 @@
 
 #include <vector>
 
-namespace NEBULA {
+namespace nebula {
 
 struct MeshData {
     std::vector<Vertex> vertices;

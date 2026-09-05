@@ -12,7 +12,7 @@
 #include <vector>
 #include <cstring>
 
-namespace NEBULA {
+namespace nebula {
 
 // Descriptor sets:
 //   Set 0 (frame, persistent): frame UBO, lights SSBO, env cubemap, BRDF LUT

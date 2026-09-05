@@ -9,7 +9,7 @@
 
 struct GLFWwindow;
 
-namespace NEBULA {
+namespace nebula {
 
 class Texture;
 class Program;

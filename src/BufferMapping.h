@@ -4,7 +4,7 @@
 #include <graphics.h>
 #include <VkContext.h>
 
-namespace NEBULA {
+namespace nebula {
 
 class BufferMappingBase : NonCopyable {
     public:

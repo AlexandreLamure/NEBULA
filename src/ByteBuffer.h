@@ -5,7 +5,7 @@
 #include <BufferMapping.h>
 #include <VkContext.h>
 
-namespace NEBULA {
+namespace nebula {
 
 class ByteBuffer : NonCopyable {
 

@@ -4,7 +4,7 @@
 
 #include <glm/vec4.hpp>
 
-namespace NEBULA {
+namespace nebula {
 
 static constexpr glm::vec4 clear_color_value = {0.5f, 0.7f, 0.8f, 1.0f};
 

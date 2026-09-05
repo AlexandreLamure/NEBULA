@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(NEBULA)
+project(nebula)
 
 # CPP setup
 set(CMAKE_CXX_STANDARD 20)
@@ -21,7 +21,7 @@ if(NOT Vulkan_FOUND)
     message(FATAL_ERROR "Vulkan SDK not found")
 endif()
 if(Vulkan_VERSION VERSION_LESS "1.3.0")
-    message(FATAL_ERROR "Vulkan SDK is too old. NEBULA requires 1.3 or newer")
+    message(FATAL_ERROR "Vulkan SDK is too old. nebula requires 1.3 or newer")
 endif()
 
 # slangc executable
@@ -47,7 +47,7 @@ include_directories(external/vma)
 include_directories(external)
 include_directories(${Vulkan_INCLUDE_DIRS})
 
-include_directories(${NEBULA_SOURCE_DIR}/src)
+include_directories(${nebula_SOURCE_DIR}/src)
 
 
 file(GLOB_RECURSE SOURCE_FILES
@@ -71,14 +71,14 @@ set_source_files_properties(${SHADER_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 
 
 
-add_executable(NEBULA ${SOURCE_FILES} ${EXTERNAL_FILES} ${SHADER_FILES})
-target_link_libraries(NEBULA glfw)
-target_compile_options(NEBULA PUBLIC ${COMPILE_OPTIONS})
+add_executable(nebula ${SOURCE_FILES} ${EXTERNAL_FILES} ${SHADER_FILES})
+target_link_libraries(nebula glfw)
+target_compile_options(nebula PUBLIC ${COMPILE_OPTIONS})
 
 # Bake absolute paths so they do not depend on cwd or build-dir layout.
 file(TO_CMAKE_PATH "${CMAKE_SOURCE_DIR}/data" NEBULA_DATA_DIR)
 file(TO_CMAKE_PATH "${CMAKE_CURRENT_BINARY_DIR}" NEBULA_SHADER_DIR)
-target_compile_definitions(NEBULA PRIVATE
+target_compile_definitions(nebula PRIVATE
     "NEBULA_DATA_PATH=\"${NEBULA_DATA_DIR}/\""
     "NEBULA_SHADER_PATH=\"${NEBULA_SHADER_DIR}/\""
 )
@@ -131,4 +131,4 @@ add_slang_shader(brdf.slang)
 add_slang_shader(equirec_cube.slang)
 
 add_custom_target(shaders DEPENDS ${SPIRV_FILES})
-add_dependencies(NEBULA shaders)
+add_dependencies(nebula shaders)
