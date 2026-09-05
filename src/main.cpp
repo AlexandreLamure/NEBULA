@@ -166,7 +166,7 @@ bool loadFileWindow(Span<std::string> files, F&& loadFunc) {
 
 void gui(ImGuiRenderer& imgui) {
 
-    static bool openGpuProfiler = false;
+    static bool openProfiler = false;
 
     imgui.start();
     DEFER(imgui.finish());
@@ -214,14 +214,16 @@ void gui(ImGuiRenderer& imgui) {
         }
 
         if(ImGui::MenuItem("Profiler")) {
-            openGpuProfiler = true;
+            openProfiler = true;
         }
 
         ImGui::Separator();
         ImGui::TextUnformatted(deviceName().c_str());
 
         ImGui::Separator();
-        ImGui::Text("%.2f ms", deltaTime * 1000.0f);
+        const float fps = (deltaTime > 0.0f) ? (1.0f / deltaTime) : 0.0f;
+        const float fpsT = std::clamp(1.0f - fps / 60.0f, 0.0f, 1.0f);
+        ImGui::TextColored(ImVec4(fpsT, 1.0f - fpsT, 0.0f, 1.0f), "%.0f FPS", fps);
 
 #ifdef NEBULA_DEBUG
         ImGui::Separator();
@@ -262,8 +264,10 @@ void gui(ImGuiRenderer& imgui) {
         ImGui::EndPopup();
     }
 
-    if(openGpuProfiler) {
-        if(ImGui::Begin(ICON_FA_CLOCK " GPU Profiler")) {
+    if(openProfiler) {
+        if(ImGui::Begin(ICON_FA_CLOCK " Profiler")) {
+            ImGui::Text("Total frame time: %.2f ms", deltaTime * 1000.0f);
+
             const ImGuiTableFlags tableFlags =
                 ImGuiTableFlags_SortTristate |
                 ImGuiTableFlags_NoSavedSettings |
