@@ -165,8 +165,6 @@ bool load_file_window(Span<std::string> files, F&& load_func) {
 }
 
 void gui(ImGuiRenderer& imgui) {
-    const ImVec4 error_text_color = ImVec4(1.0f, 0.3f, 0.3f, 1.0f);
-    const ImVec4 warning_text_color = ImVec4(1.0f, 0.8f, 0.4f, 1.0f);
 
     static bool open_gpu_profiler = false;
 
@@ -215,7 +213,7 @@ void gui(ImGuiRenderer& imgui) {
             ImGui::EndMenu();
         }
 
-        if(ImGui::MenuItem("GPU Profiler")) {
+        if(ImGui::MenuItem("Profiler")) {
             open_gpu_profiler = true;
         }
 
@@ -227,6 +225,7 @@ void gui(ImGuiRenderer& imgui) {
 
 #ifdef NEBULA_DEBUG
         ImGui::Separator();
+        const ImVec4 warning_text_color = ImVec4(1.0f, 0.8f, 0.4f, 1.0f);
         ImGui::TextColored(warning_text_color, ICON_FA_BUG " (DEBUG)");
 #endif
 
@@ -366,7 +365,7 @@ struct RendererState {
 
 
 
-int main(int argc, char** argv) {
+int main() {
     DEBUG_ASSERT([] { std::cout << "Debug asserts enabled" << std::endl; return true; }());
 
     glfw_check(glfwInit());
@@ -412,13 +411,6 @@ int main(int argc, char** argv) {
         }
 
         begin_frame();
-
-        // Frame graph recorded into this frame's command buffer:
-        //   HDR + depth  → scene (sun, point lights, IBL, sky)
-        //   RGBA8        → ACES tonemap (samples the HDR; exposure is a push constant)
-        //   swapchain    → blit, then GUI (second pass LOADs the blit result)
-        // Ending a RenderPass transitions its offscreen colors to SHADER_READ_ONLY
-        // so the next pass can sample them.
         {
             PROFILE_GPU("Frame");
 
@@ -448,7 +440,6 @@ int main(int argc, char** argv) {
                 gui(*imgui);
             });
         }
-
         end_frame();
     }
 
