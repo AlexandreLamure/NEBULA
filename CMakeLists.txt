@@ -128,7 +128,7 @@ add_slang_shader(tonemap.slang)
 add_slang_shader(passthrough.slang)
 add_slang_shader(imgui.slang)
 add_slang_shader(brdf.slang)
-add_slang_shader(equirec_cube.slang)
+add_slang_shader(equirecCube.slang)
 
 add_custom_target(shaders DEPENDS ${SPIRV_FILES})
 add_dependencies(nebula shaders)

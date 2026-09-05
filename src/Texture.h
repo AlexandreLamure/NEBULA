@@ -20,7 +20,7 @@ struct TextureData {
     glm::uvec2 size = {};
     ImageFormat format;
 
-    static Result<TextureData> from_file(const std::string& file_name);
+    static Result<TextureData> fromFile(const std::string& fileName);
 };
 
 
@@ -49,44 +49,44 @@ class Texture {
 
         Texture(const glm::uvec2 &size, ImageFormat format, WrapMode wrap);
 
-        static Texture empty_cubemap(u32 size, ImageFormat format, u32 mipmaps = 1);
-        static Texture cubemap_from_equirec(const Texture& equirec);
+        static Texture emptyCubemap(u32 size, ImageFormat format, u32 mipmaps = 1);
+        static Texture cubemapFromEquirec(const Texture& equirec);
 
-        bool is_null() const;
+        bool isNull() const;
 
-        TextureType texture_type() const;
+        TextureType textureType() const;
 
         glm::uvec2 size() const;
 
-        static u32 mip_levels(glm::uvec2 size);
+        static u32 mipLevels(glm::uvec2 size);
 
-        VkImage vk_image() const { return _image; }
-        VkImageView vk_view() const { return _view; }
-        VkImageView vk_storage_view() const { return _storage_view ? _storage_view : _view; }
-        VkImageLayout vk_layout() const { return _layout; }
-        void set_vk_layout(VkImageLayout layout) { _layout = layout; }
-        WrapMode wrap_mode() const { return _wrap; }
-        VkFormat vk_format() const { return image_format_to_vk(_format); }
-        bool is_cube() const;
+        VkImage vkImage() const { return _image; }
+        VkImageView vkView() const { return _view; }
+        VkImageView vkStorageView() const { return _storageView ? _storageView : _view; }
+        VkImageLayout vkLayout() const { return _layout; }
+        void setVkLayout(VkImageLayout layout) { _layout = layout; }
+        WrapMode wrapMode() const { return _wrap; }
+        VkFormat vkFormat() const { return imageFormatToVk(_format); }
+        bool isCube() const;
 
     private:
         void swap(Texture& other);
         void destroy();
 
-        void create_gpu_image(glm::uvec2 size, ImageFormat format, TextureType type, u32 mip_levels, VkImageUsageFlags usage);
-        void upload_pixels(VkCommandBuffer cmd, VkBuffer staging_buffer, size_t byte_size);
-        void generate_mipmaps(VkCommandBuffer cmd);
-        void finish_sampled_texture(const void* pixels, size_t byte_size);
+        void createGpuImage(glm::uvec2 size, ImageFormat format, TextureType type, u32 mipLevels, VkImageUsageFlags usage);
+        void uploadPixels(VkCommandBuffer cmd, VkBuffer stagingBuffer, size_t byteSize);
+        void generateMipmaps(VkCommandBuffer cmd);
+        void finishSampledTexture(const void* pixels, size_t byteSize);
 
         // Image + view + tracked layout for sampling and dynamic rendering.
         VkImage _image = VK_NULL_HANDLE;
         VmaAllocation _allocation = nullptr;
         VkImageView _view = VK_NULL_HANDLE;
-        VkImageView _storage_view = VK_NULL_HANDLE;
+        VkImageView _storageView = VK_NULL_HANDLE;
         VkImageLayout _layout = VK_IMAGE_LAYOUT_UNDEFINED;
 
         glm::uvec2 _size = {};
-        u32 _mip_levels = 1;
+        u32 _mipLevels = 1;
         ImageFormat _format;
         WrapMode _wrap = WrapMode::Repeat;
         TextureType _type = TextureType::Tex2D;

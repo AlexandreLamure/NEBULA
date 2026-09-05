@@ -7,23 +7,23 @@ namespace nebula {
 Material::Material() {
 }
 
-void Material::set_program(std::shared_ptr<Program> prog) {
+void Material::setProgram(std::shared_ptr<Program> prog) {
     _program = std::move(prog);
 }
 
-void Material::set_blend_mode(BlendMode blend) {
-    _blend_mode = blend;
+void Material::setBlendMode(BlendMode blend) {
+    _blendMode = blend;
 }
 
-void Material::set_depth_test_mode(DepthTestMode depth) {
-    _depth_test_mode = depth;
+void Material::setDepthTestMode(DepthTestMode depth) {
+    _depthTestMode = depth;
 }
 
-void Material::set_double_sided(bool double_sided) {
-    _double_sided = double_sided;
+void Material::setDoubleSided(bool doubleSided) {
+    _doubleSided = doubleSided;
 }
 
-void Material::set_texture(u32 slot, std::shared_ptr<Texture> tex) {
+void Material::setTexture(u32 slot, std::shared_ptr<Texture> tex) {
     if(const auto it = std::find_if(_textures.begin(), _textures.end(), [&](const auto& t) { return t.first == slot; }); it != _textures.end()) {
         it->second = std::move(tex);
     } else {
@@ -31,18 +31,18 @@ void Material::set_texture(u32 slot, std::shared_ptr<Texture> tex) {
     }
 }
 
-bool Material::is_opaque() const {
-    return _blend_mode == BlendMode::None;
+bool Material::isOpaque() const {
+    return _blendMode == BlendMode::None;
 }
 
-void Material::set_stored_uniform(u32 name_hash, UniformValue value) {
+void Material::setStoredUniform(u32 nameHash, UniformValue value) {
     for(auto& [h, v] : _uniforms) {
-        if(h == name_hash) {
+        if(h == nameHash) {
             v = value;
             return;
         }
     }
-    _uniforms.emplace_back(name_hash, std::move(value));
+    _uniforms.emplace_back(nameHash, std::move(value));
 }
 
 const Program& Material::program() const {
@@ -50,47 +50,47 @@ const Program& Material::program() const {
     return *_program;
 }
 
-RasterState Material::raster_state() const {
+RasterState Material::rasterState() const {
     RasterState raster;
-    raster.alpha_blend = (_blend_mode == BlendMode::Alpha);
-    raster.cull_mode = _double_sided ? VK_CULL_MODE_NONE : VK_CULL_MODE_BACK_BIT;
+    raster.alphaBlend = (_blendMode == BlendMode::Alpha);
+    raster.cullMode = _doubleSided ? VK_CULL_MODE_NONE : VK_CULL_MODE_BACK_BIT;
 
-    switch(_depth_test_mode) {
+    switch(_depthTestMode) {
         case DepthTestMode::None:
-            raster.depth_test_enable = false;
+            raster.depthTestEnable = false;
             break;
 
         case DepthTestMode::Equal:
-            raster.depth_test_enable = true;
-            raster.depth_compare_op = VK_COMPARE_OP_EQUAL;
+            raster.depthTestEnable = true;
+            raster.depthCompareOp = VK_COMPARE_OP_EQUAL;
             break;
 
         case DepthTestMode::Standard:
-            raster.depth_test_enable = true;
+            raster.depthTestEnable = true;
             // Reverse-Z: nearer fragments have *greater* depth.
-            raster.depth_compare_op = VK_COMPARE_OP_GREATER_OR_EQUAL;
+            raster.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
             break;
 
         case DepthTestMode::Reversed:
-            raster.depth_test_enable = true;
-            raster.depth_compare_op = VK_COMPARE_OP_LESS_OR_EQUAL;
+            raster.depthTestEnable = true;
+            raster.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
             break;
     }
 
     return raster;
 }
 
-PassResources Material::pass_resources() const {
+PassResources Material::passResources() const {
     PassResources pass{};
     for(const auto& [slot, tex] : _textures) {
-        if(slot < pass_texture_slot_count && tex) {
+        if(slot < passTextureSlotCount && tex) {
             pass.textures[slot] = tex.get();
         }
     }
     return pass;
 }
 
-PushConstants Material::build_push_constants() const {
+PushConstants Material::buildPushConstants() const {
     PushConstants push;
     for(const auto& [h, v] : _uniforms) {
         push.set(h, v);
@@ -98,16 +98,16 @@ PushConstants Material::build_push_constants() const {
     return push;
 }
 
-Material Material::textured_pbr_material(bool alpha_test) {
+Material Material::texturedPbrMaterial(bool alphaTest) {
     Material material;
 
-    const char* frag = alpha_test ? "lit_ALPHA_TEST.slang" : "lit.slang";
-    material._program = Program::from_files("basic.slang", frag);
+    const char* frag = alphaTest ? "lit_ALPHA_TEST.slang" : "lit.slang";
+    material._program = Program::fromFiles("basic.slang", frag);
 
-    material.set_texture(0u, default_white_texture());
-    material.set_texture(1u, default_normal_texture());
-    material.set_texture(2u, default_metal_rough_texture());
-    material.set_texture(3u, default_white_texture());
+    material.setTexture(0u, defaultWhiteTexture());
+    material.setTexture(1u, defaultNormalTexture());
+    material.setTexture(2u, defaultMetalRoughTexture());
+    material.setTexture(3u, defaultWhiteTexture());
 
     return material;
 }

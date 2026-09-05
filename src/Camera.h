@@ -8,50 +8,50 @@
 namespace nebula {
 
 struct Frustum {
-    glm::vec3 _near_normal;
+    glm::vec3 _nearNormal;
     // No far plane (zFar is +inf)
-    glm::vec3 _top_normal;
-    glm::vec3 _bottom_normal;
-    glm::vec3 _right_normal;
-    glm::vec3 _left_normal;
+    glm::vec3 _topNormal;
+    glm::vec3 _bottomNormal;
+    glm::vec3 _rightNormal;
+    glm::vec3 _leftNormal;
 };
 
 
 class Camera {
     public:
-        static glm::mat4 perspective(float fov_y, float ratio, float z_near);
-        static glm::mat4 orthographic(float left, float right, float bottom, float top, float z_near, float z_far);
+        static glm::mat4 perspective(float fovY, float ratio, float zNear);
+        static glm::mat4 orthographic(float left, float right, float bottom, float top, float zNear, float zFar);
 
         Camera();
 
-        void set_view(const glm::mat4& matrix);
-        void set_proj(const glm::mat4& matrix);
+        void setView(const glm::mat4& matrix);
+        void setProj(const glm::mat4& matrix);
 
-        void set_fov(float fov);
-        void set_ratio(float ratio);
+        void setFov(float fov);
+        void setRatio(float ratio);
 
         glm::vec3 position() const;
         glm::vec3 forward() const;
         glm::vec3 right() const;
         glm::vec3 up() const;
 
-        const glm::mat4& projection_matrix() const;
-        const glm::mat4& view_matrix() const;
-        const glm::mat4& view_proj_matrix() const;
+        const glm::mat4& projectionMatrix() const;
+        const glm::mat4& viewMatrix() const;
+        const glm::mat4& viewProjMatrix() const;
 
-        bool is_orthographic() const;
+        bool isOrthographic() const;
 
         float fov() const;
         float ratio() const;
 
-        Frustum build_frustum() const;
+        Frustum buildFrustum() const;
 
     private:
         void update();
 
         glm::mat4 _projection;
         glm::mat4 _view;
-        glm::mat4 _view_proj;
+        glm::mat4 _viewProj;
 };
 
 }

@@ -4,30 +4,30 @@ namespace nebula {
 
 
 // Reverse-Z infinite perspective stores 0 in m[3][3]; an orthographic matrix stores 1.
-static bool is_proj_orthographic(const glm::mat4& proj) {
+static bool isProjOrthographic(const glm::mat4& proj) {
     return proj[3][3] == 1.0f;
 }
 
 // Aspect ratio is |m[1][1] / m[0][0]| for this projection layout.
-static float extract_ratio(const glm::mat4& proj) {
+static float extractRatio(const glm::mat4& proj) {
     const float f = proj[1][1];
     return std::abs(1.0f / (proj[0][0] / f));
 }
 
 // Near plane lives in m[3][2] of the reverse-Z infinite projection.
-static float extract_near(const glm::mat4& proj) {
+static float extractNear(const glm::mat4& proj) {
     return proj[3][2];
 }
 
 // Vertical FOV is 2*atan(1/m[1][1]), recovered from the perspective scale.
-static float extract_fov(const glm::mat4& proj) {
-    ALWAYS_ASSERT(!is_proj_orthographic(proj), "Orthographic camera doesn't have a FoV");
+static float extractFov(const glm::mat4& proj) {
+    ALWAYS_ASSERT(!isProjOrthographic(proj), "Orthographic camera doesn't have a FoV");
     const float f = proj[1][1];
     return 2.0f * std::atan(1.0f / f);
 }
 
 // Camera world position is -R^T * t, recovered from the view matrix rotation and translation.
-static glm::vec3 extract_position(const glm::mat4& view) {
+static glm::vec3 extractPosition(const glm::mat4& view) {
     glm::vec3 pos = {};
     for(u32 i = 0; i != 3; ++i) {
         pos -= glm::vec3(view[0][i], view[1][i], view[2][i]) * view[3][i];
@@ -36,15 +36,15 @@ static glm::vec3 extract_position(const glm::mat4& view) {
 }
 
 // View-space -Z is the third row of the lookAt rotation; negate it to get world forward.
-static glm::vec3 extract_forward(const glm::mat4& view) {
+static glm::vec3 extractForward(const glm::mat4& view) {
     return -glm::normalize(glm::vec3(view[0][2], view[1][2], view[2][2]));
 }
 
-static glm::vec3 extract_right(const glm::mat4& view) {
+static glm::vec3 extractRight(const glm::mat4& view) {
     return glm::normalize(glm::vec3(view[0][0], view[1][0], view[2][0]));
 }
 
-static glm::vec3 extract_up(const glm::mat4& view) {
+static glm::vec3 extractUp(const glm::mat4& view) {
     return glm::normalize(glm::vec3(view[0][1], view[1][1], view[2][1]));
 }
 
@@ -53,112 +53,112 @@ static glm::vec3 extract_up(const glm::mat4& view) {
 
 
 // Reverse-Z infinite-far projection: near maps to 1 and far to 0 so depth precision clusters at the camera.
-glm::mat4 Camera::perspective(float fov_y, float ratio, float z_near) {
-    float f = 1.0f / std::tan(fov_y / 2.0f);
+glm::mat4 Camera::perspective(float fovY, float ratio, float zNear) {
+    float f = 1.0f / std::tan(fovY / 2.0f);
     return glm::mat4(f / ratio, 0.0f,  0.0f,  0.0f,
                   0.0f,    f,  0.0f,  0.0f,
                   0.0f, 0.0f,  0.0f, -1.0f,
-                  0.0f, 0.0f, z_near,  0.0f);
+                  0.0f, 0.0f, zNear,  0.0f);
 }
 
 // glm::orthoZO gives 0–1 depth; the extra matrix flips Z so far is 0 (reverse-Z).
-glm::mat4 Camera::orthographic(float left, float right, float bottom, float top, float z_near, float z_far) {
-    glm::mat4 reverse_z = glm::mat4(1.0f);
-    reverse_z[2][2] = -1.0f;
-    reverse_z[3][2] = 1.0f;
-    return reverse_z * glm::orthoZO<float>(left, right, bottom, top, z_near, z_far);
+glm::mat4 Camera::orthographic(float left, float right, float bottom, float top, float zNear, float zFar) {
+    glm::mat4 reverseZ = glm::mat4(1.0f);
+    reverseZ[2][2] = -1.0f;
+    reverseZ[3][2] = 1.0f;
+    return reverseZ * glm::orthoZO<float>(left, right, bottom, top, zNear, zFar);
 }
 
 Camera::Camera() {
-    _projection = perspective(to_rad(60.0f), 16.0f / 9.0f, 0.001f);
+    _projection = perspective(toRad(60.0f), 16.0f / 9.0f, 0.001f);
     _view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     update();
 }
 
-void Camera::set_view(const glm::mat4& matrix) {
+void Camera::setView(const glm::mat4& matrix) {
     _view = matrix;
     update();
 }
 
-void Camera::set_proj(const glm::mat4& matrix) {
+void Camera::setProj(const glm::mat4& matrix) {
     _projection = matrix;
     update();
 }
 
-void Camera::set_fov(float fov) {
-    set_proj(perspective(fov, ratio(), extract_near(_projection)));
+void Camera::setFov(float fov) {
+    setProj(perspective(fov, ratio(), extractNear(_projection)));
 }
 
-void Camera::set_ratio(float ratio) {
-    set_proj(perspective(fov(), ratio, extract_near(_projection)));
+void Camera::setRatio(float ratio) {
+    setProj(perspective(fov(), ratio, extractNear(_projection)));
 }
 
 glm::vec3 Camera::position() const {
-    return extract_position(_view);
+    return extractPosition(_view);
 }
 
 glm::vec3 Camera::forward() const {
-    return extract_forward(_view);
+    return extractForward(_view);
 }
 
 glm::vec3 Camera::right() const {
-    return extract_right(_view);
+    return extractRight(_view);
 }
 
 glm::vec3 Camera::up() const {
-    return extract_up(_view);
+    return extractUp(_view);
 }
 
-const glm::mat4& Camera::projection_matrix() const {
+const glm::mat4& Camera::projectionMatrix() const {
     return _projection;
 }
 
-const glm::mat4& Camera::view_matrix() const {
+const glm::mat4& Camera::viewMatrix() const {
     return _view;
 }
 
-const glm::mat4& Camera::view_proj_matrix() const {
-    return _view_proj;
+const glm::mat4& Camera::viewProjMatrix() const {
+    return _viewProj;
 }
 
-bool Camera::is_orthographic() const {
-    return is_proj_orthographic(_projection);
+bool Camera::isOrthographic() const {
+    return isProjOrthographic(_projection);
 }
 
 float Camera::fov() const {
-    return is_orthographic() ? 0.0f : extract_fov(_projection);
+    return isOrthographic() ? 0.0f : extractFov(_projection);
 }
 
 float Camera::ratio() const {
-    return extract_ratio(_projection);
+    return extractRatio(_projection);
 }
 
 void Camera::update() {
-    _view_proj = _projection * _view;
+    _viewProj = _projection * _view;
 }
 
 // Inward-facing plane normals from camera axes, tilted by half-FOV (and its aspect-corrected sibling).
-Frustum Camera::build_frustum() const {
-    const glm::vec3 camera_forward = forward();
-    const glm::vec3 camera_up = up();
-    const glm::vec3 camera_right = right();
+Frustum Camera::buildFrustum() const {
+    const glm::vec3 cameraForward = forward();
+    const glm::vec3 cameraUp = up();
+    const glm::vec3 cameraRight = right();
 
     Frustum frustum;
-    frustum._near_normal = camera_forward;
+    frustum._nearNormal = cameraForward;
 
-    const float half_fov = fov() * 0.5f;
-    const float half_fov_v = std::atan(std::tan(half_fov) * ratio());
+    const float halfFov = fov() * 0.5f;
+    const float halfFovV = std::atan(std::tan(halfFov) * ratio());
     {
-        const float c = std::cos(half_fov);
-        const float s = std::sin(half_fov);
-        frustum._bottom_normal = camera_forward * s + camera_up * c;
-        frustum._top_normal = camera_forward * s - camera_up * c;
+        const float c = std::cos(halfFov);
+        const float s = std::sin(halfFov);
+        frustum._bottomNormal = cameraForward * s + cameraUp * c;
+        frustum._topNormal = cameraForward * s - cameraUp * c;
     }
     {
-        const float c = std::cos(half_fov_v);
-        const float s = std::sin(half_fov_v);
-        frustum._left_normal = camera_forward * s + camera_right * c;
-        frustum._right_normal = camera_forward * s - camera_right * c;
+        const float c = std::cos(halfFovV);
+        const float s = std::sin(halfFovV);
+        frustum._leftNormal = cameraForward * s + cameraRight * c;
+        frustum._rightNormal = cameraForward * s - cameraRight * c;
     }
 
     return frustum;

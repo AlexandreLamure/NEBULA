@@ -10,32 +10,32 @@ struct AllocatedBuffer {
     VmaAllocationInfo info = {};
 };
 
-static AllocatedBuffer create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VmaAllocationCreateFlags flags, VmaMemoryUsage memory_usage) {
-    const VkBufferCreateInfo buffer_ci{
+static AllocatedBuffer createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VmaAllocationCreateFlags flags, VmaMemoryUsage memoryUsage) {
+    const VkBufferCreateInfo bufferCi{
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = size,
         .usage = usage,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
-    const VmaAllocationCreateInfo alloc_ci{
+    const VmaAllocationCreateInfo allocCi{
         .flags = flags,
-        .usage = memory_usage,
+        .usage = memoryUsage,
     };
 
     AllocatedBuffer out;
-    vk_check(vmaCreateBuffer(device_allocator(), &buffer_ci, &alloc_ci, &out.buffer, &out.allocation, &out.info));
+    vkCheck(vmaCreateBuffer(deviceAllocator(), &bufferCi, &allocCi, &out.buffer, &out.allocation, &out.info));
     return out;
 }
 
 // HOST_VISIBLE memory still needs an explicit flush unless it is also HOST_COHERENT.
-static bool allocation_needs_flush(VmaAllocation allocation) {
-    VkMemoryPropertyFlags mem_flags = 0;
-    vmaGetAllocationMemoryProperties(device_allocator(), allocation, &mem_flags);
-    return !(mem_flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+static bool allocationNeedsFlush(VmaAllocation allocation) {
+    VkMemoryPropertyFlags memFlags = 0;
+    vmaGetAllocationMemoryProperties(deviceAllocator(), allocation, &memFlags);
+    return !(memFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 }
 
-static void upload_via_staging(VkBuffer dst, const void* data, size_t size) {
-    AllocatedBuffer staging = create_buffer(
+static void uploadViaStaging(VkBuffer dst, const void* data, size_t size) {
+    AllocatedBuffer staging = createBuffer(
         size,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
@@ -44,16 +44,16 @@ static void upload_via_staging(VkBuffer dst, const void* data, size_t size) {
 
     ALWAYS_ASSERT(staging.info.pMappedData, "Staging buffer is not mapped");
     std::memcpy(staging.info.pMappedData, data, size);
-    if(allocation_needs_flush(staging.allocation)) {
-        vk_check(vmaFlushAllocation(device_allocator(), staging.allocation, 0, VK_WHOLE_SIZE));
+    if(allocationNeedsFlush(staging.allocation)) {
+        vkCheck(vmaFlushAllocation(deviceAllocator(), staging.allocation, 0, VK_WHOLE_SIZE));
     }
 
-    immediate_submit([&](VkCommandBuffer cmd) {
+    immediateSubmit([&](VkCommandBuffer cmd) {
         const VkBufferCopy copy{.size = size};
         vkCmdCopyBuffer(cmd, staging.buffer, dst, 1, &copy);
     });
 
-    vmaDestroyBuffer(device_allocator(), staging.buffer, staging.allocation);
+    vmaDestroyBuffer(deviceAllocator(), staging.buffer, staging.allocation);
 }
 
 ByteBuffer::ByteBuffer(ByteBuffer&& other) {
@@ -70,7 +70,7 @@ void ByteBuffer::swap(ByteBuffer& other) {
     std::swap(_allocation, other._allocation);
     std::swap(_mapped, other._mapped);
     std::swap(_size, other._size);
-    std::swap(_needs_flush, other._needs_flush);
+    std::swap(_needsFlush, other._needsFlush);
 }
 
 ByteBuffer::ByteBuffer(const void* data, size_t size) : _size(size) {
@@ -79,7 +79,7 @@ ByteBuffer::ByteBuffer(const void* data, size_t size) : _size(size) {
     // TODO: this heuristic is not great. I should build a proper system to declare which are used for which purposes.
     if(data) {
         // Mesh vertex/index: device-local, uploaded once through a staging buffer.
-        AllocatedBuffer gpu = create_buffer(
+        AllocatedBuffer gpu = createBuffer(
             size,
             VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
             0,
@@ -87,11 +87,11 @@ ByteBuffer::ByteBuffer(const void* data, size_t size) : _size(size) {
         );
         _buffer = gpu.buffer;
         _allocation = gpu.allocation;
-        upload_via_staging(_buffer, data, size);
+        uploadViaStaging(_buffer, data, size);
     } else {
         // Uniform/storage (and ImGui vertex/index): persistently mapped, written every frame.
         // Usage is not declared at create time, so allow every bind target this class supports.
-        AllocatedBuffer host = create_buffer(
+        AllocatedBuffer host = createBuffer(
             size,
             VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
                 | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
@@ -102,26 +102,26 @@ ByteBuffer::ByteBuffer(const void* data, size_t size) : _size(size) {
         _allocation = host.allocation;
         _mapped = host.info.pMappedData;
         ALWAYS_ASSERT(_mapped, "Host-visible buffer is not mapped");
-        _needs_flush = allocation_needs_flush(_allocation);
+        _needsFlush = allocationNeedsFlush(_allocation);
     }
 }
 
 ByteBuffer::~ByteBuffer() {
-    defer_destroy(_buffer, _allocation);
+    deferDestroy(_buffer, _allocation);
     _buffer = VK_NULL_HANDLE;
     _allocation = nullptr;
     _mapped = nullptr;
 }
 
-size_t ByteBuffer::byte_size() const {
+size_t ByteBuffer::byteSize() const {
     return _size;
 }
 
-BufferMapping<byte> ByteBuffer::map_bytes(AccessType access) {
-    return BufferMapping<byte>(map_internal(access), byte_size(), allocation(), mapping_needs_flush());
+BufferMapping<byte> ByteBuffer::mapBytes(AccessType access) {
+    return BufferMapping<byte>(mapInternal(access), byteSize(), allocation(), mappingNeedsFlush());
 }
 
-void* ByteBuffer::map_internal(AccessType) {
+void* ByteBuffer::mapInternal(AccessType) {
     DEBUG_ASSERT(_buffer && _size);
     ALWAYS_ASSERT(_mapped, "This buffer is device-local and cannot be mapped");
     return _mapped;
@@ -131,8 +131,8 @@ VmaAllocation ByteBuffer::allocation() const {
     return _allocation;
 }
 
-bool ByteBuffer::mapping_needs_flush() const {
-    return _needs_flush;
+bool ByteBuffer::mappingNeedsFlush() const {
+    return _needsFlush;
 }
 
 }

@@ -12,15 +12,15 @@ class PointLight {
     public:
         PointLight() = default;
 
-        void set_position(const glm::vec3& pos) {
+        void setPosition(const glm::vec3& pos) {
             _position = pos;
         }
 
-        void set_color(const glm::vec3& color) {
+        void setColor(const glm::vec3& color) {
             _color = color;
         }
 
-        void set_radius(float radius) {
+        void setRadius(float radius) {
             _radius = radius;
         }
 

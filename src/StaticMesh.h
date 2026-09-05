@@ -23,13 +23,13 @@ class StaticMesh : NonCopyable {
 
         StaticMesh(const MeshData& data);
 
-        VkBuffer vertex_buffer() const { return _vertex_buffer.vk_buffer(); }
-        VkBuffer index_buffer() const { return _index_buffer.vk_buffer(); }
-        u32 index_count() const { return u32(_index_buffer.element_count()); }
+        VkBuffer vertexBuffer() const { return _vertexBuffer.vkBuffer(); }
+        VkBuffer indexBuffer() const { return _indexBuffer.vkBuffer(); }
+        u32 indexCount() const { return u32(_indexBuffer.elementCount()); }
 
     private:
-        TypedBuffer<Vertex> _vertex_buffer;
-        TypedBuffer<u32> _index_buffer;
+        TypedBuffer<Vertex> _vertexBuffer;
+        TypedBuffer<u32> _indexBuffer;
 };
 
 }

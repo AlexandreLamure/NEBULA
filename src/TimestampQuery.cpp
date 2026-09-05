@@ -14,41 +14,41 @@ namespace nebula {
 namespace profile {
     struct Marker {
         std::string name;
-        u32 contained_zones;
-        double cpu_time;
+        u32 containedZones;
+        double cpuTime;
         TimestampQuery query;
     };
 
-    static std::vector<Marker> current_frame;
-    static std::deque<std::vector<Marker>> queued_frames;
+    static std::vector<Marker> currentFrame;
+    static std::deque<std::vector<Marker>> queuedFrames;
     static std::vector<ProfileZone> ready;
 
-    void destroy_profile() {
-        current_frame.clear();
-        queued_frames.clear();
+    void destroyProfile() {
+        currentFrame.clear();
+        queuedFrames.clear();
         ready.clear();
     }
 
-    u32 begin_profile_zone(const char* name) {
-        const u32 index = u32(current_frame.size());
+    u32 beginProfileZone(const char* name) {
+        const u32 index = u32(currentFrame.size());
 
-        // Either you forgot to call process_profile_markers every frame, or you have too many marker
+        // Either you forgot to call processProfileMarkers every frame, or you have too many marker
         // In the later case, you can just remove this assert
         ALWAYS_ASSERT(index < 65536, "Too many profile markers");
 
-        Marker& marker = current_frame.emplace_back();
+        Marker& marker = currentFrame.emplace_back();
         marker.name = name;
-        marker.cpu_time = program_time();
+        marker.cpuTime = programTime();
         marker.query.begin();
 
         return index;
     }
 
-    // contained_zones is how many markers nested inside this one, used to draw a tree in the profiler UI.
-    void end_profile_zone(u32 zone_id) {
-        Marker& marker = current_frame[zone_id];
-        marker.cpu_time = program_time() - marker.cpu_time;
-        marker.contained_zones = u32(current_frame.size()) - zone_id - 1;
+    // containedZones is how many markers nested inside this one, used to draw a tree in the profiler UI.
+    void endProfileZone(u32 zoneId) {
+        Marker& marker = currentFrame[zoneId];
+        marker.cpuTime = programTime() - marker.cpuTime;
+        marker.containedZones = u32(currentFrame.size()) - zoneId - 1;
         marker.query.end();
     }
 }
@@ -57,60 +57,60 @@ namespace profile {
 
 
 // GPU timestamps lag the CPU, so frames sit in a queue until the oldest one's queries are ready.
-void process_profile_markers() {
-    profile::queued_frames.emplace_back().swap(profile::current_frame);
-    DEBUG_ASSERT(profile::current_frame.empty());
+void processProfileMarkers() {
+    profile::queuedFrames.emplace_back().swap(profile::currentFrame);
+    DEBUG_ASSERT(profile::currentFrame.empty());
 
-    bool any_profile_ready = false;
-    std::vector<profile::Marker> ready_frame;
-    while(!profile::queued_frames.empty()) {
-        auto& frame = profile::queued_frames.front();
+    bool anyProfileReady = false;
+    std::vector<profile::Marker> readyFrame;
+    while(!profile::queuedFrames.empty()) {
+        auto& frame = profile::queuedFrames.front();
 
         bool ready = true;
         for(auto& marker : frame) {
-            if(!marker.query.seconds().is_ok) {
+            if(!marker.query.seconds().isOk) {
                 ready = false;
                 break;
             }
         }
 
         if(ready) {
-            any_profile_ready = true;
-            ready_frame = std::move(frame);
-            profile::queued_frames.pop_front();
+            anyProfileReady = true;
+            readyFrame = std::move(frame);
+            profile::queuedFrames.pop_front();
         } else {
             break;
         }
     }
 
-    if(any_profile_ready) {
+    if(anyProfileReady) {
         profile::ready.clear();
-        for(auto& marker : ready_frame) {
+        for(auto& marker : readyFrame) {
             ProfileZone& zone = profile::ready.emplace_back();
             zone.name = std::move(marker.name);
-            zone.contained_zones = marker.contained_zones;
-            zone.cpu_time = float(marker.cpu_time);
-            zone.gpu_time = float(marker.query.seconds(true).value);
+            zone.containedZones = marker.containedZones;
+            zone.cpuTime = float(marker.cpuTime);
+            zone.gpuTime = float(marker.query.seconds(true).value);
         }
     }
 }
 
-Span<ProfileZone> retrieve_profile() {
+Span<ProfileZone> retrieveProfile() {
     return profile::ready;
 }
 
-void reset_timestamp_queries() {
+void resetTimestampQueries() {
     GraphicsContext& c = ctx();
-    const u32 slot = c.frame_index;
-    VkQueryPool pool = c.timestamp_pools[slot];
+    const u32 slot = c.frameIndex;
+    VkQueryPool pool = c.timestampPools[slot];
     if(!pool) {
         return;
     }
 
-    const u32 count = c.timestamp_allocated[slot];
+    const u32 count = c.timestampAllocated[slot];
     if(count) {
-        std::array<u64, timestamp_queries_per_frame> ticks{};
-        vk_check(vkGetQueryPoolResults(
+        std::array<u64, timestampQueriesPerFrame> ticks{};
+        vkCheck(vkGetQueryPoolResults(
             c.device,
             pool,
             0,
@@ -121,23 +121,23 @@ void reset_timestamp_queries() {
             VK_QUERY_RESULT_64_BIT
         ));
 
-        for(auto& marker : profile::current_frame) {
-            marker.query.capture_from_pool(slot, ticks.data(), count);
+        for(auto& marker : profile::currentFrame) {
+            marker.query.captureFromPool(slot, ticks.data(), count);
         }
-        for(auto& frame : profile::queued_frames) {
+        for(auto& frame : profile::queuedFrames) {
             for(auto& marker : frame) {
-                marker.query.capture_from_pool(slot, ticks.data(), count);
+                marker.query.captureFromPool(slot, ticks.data(), count);
             }
         }
     }
 
-    vkResetQueryPool(c.device, pool, 0, timestamp_queries_per_frame);
-    c.timestamp_allocated[slot] = 0;
+    vkResetQueryPool(c.device, pool, 0, timestampQueriesPerFrame);
+    c.timestampAllocated[slot] = 0;
 }
 
 // Some queues report fewer than 64 valid timestamp bits; wrap arithmetic must mask to that width.
-static u64 timestamp_mask() {
-    const u32 bits = ctx().timestamp_valid_bits;
+static u64 timestampMask() {
+    const u32 bits = ctx().timestampValidBits;
     if(bits == 0 || bits >= 64) {
         return ~u64(0);
     }
@@ -145,9 +145,9 @@ static u64 timestamp_mask() {
 }
 
 // Wrap-safe tick delta times timestampPeriod (nanoseconds) to seconds.
-static double ticks_to_seconds(u64 begin_ticks, u64 end_ticks) {
-    const u64 delta = (end_ticks - begin_ticks) & timestamp_mask();
-    return double(delta) * double(ctx().timestamp_period) * 1e-9;
+static double ticksToSeconds(u64 beginTicks, u64 endTicks) {
+    const u64 delta = (endTicks - beginTicks) & timestampMask();
+    return double(delta) * double(ctx().timestampPeriod) * 1e-9;
 }
 
 TimestampQuery::~TimestampQuery() {
@@ -171,7 +171,7 @@ void TimestampQuery::swap(TimestampQuery& other) {
     std::swap(_state, other._state);
 }
 
-TimestampQuery TimestampQuery::create_and_begin() {
+TimestampQuery TimestampQuery::createAndBegin() {
     TimestampQuery ts;
     ts.begin();
     return ts;
@@ -181,23 +181,23 @@ void TimestampQuery::begin() {
     DEBUG_ASSERT(_state == State::None);
     _state = State::Started;
 
-    if(!vk_is_recording()) {
+    if(!vkIsRecording()) {
         return;
     }
 
     GraphicsContext& c = ctx();
-    _slot = c.frame_index;
-    VkQueryPool pool = c.timestamp_pools[_slot];
+    _slot = c.frameIndex;
+    VkQueryPool pool = c.timestampPools[_slot];
     if(!pool) {
         return;
     }
 
-    ALWAYS_ASSERT(c.timestamp_allocated[_slot] + 2 <= timestamp_queries_per_frame, "Too many GPU timestamps this frame");
-    _begin = c.timestamp_allocated[_slot];
+    ALWAYS_ASSERT(c.timestampAllocated[_slot] + 2 <= timestampQueriesPerFrame, "Too many GPU timestamps this frame");
+    _begin = c.timestampAllocated[_slot];
     _end = _begin + 1;
-    c.timestamp_allocated[_slot] += 2;
+    c.timestampAllocated[_slot] += 2;
 
-    vkCmdWriteTimestamp2(vk_command_buffer(), VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, pool, _begin);
+    vkCmdWriteTimestamp2(vkCommandBuffer(), VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, pool, _begin);
 }
 
 void TimestampQuery::end() {
@@ -208,15 +208,15 @@ void TimestampQuery::end() {
         return;
     }
 
-    VkQueryPool pool = ctx().timestamp_pools[_slot];
-    if(!pool || !vk_is_recording()) {
+    VkQueryPool pool = ctx().timestampPools[_slot];
+    if(!pool || !vkIsRecording()) {
         return;
     }
 
-    vkCmdWriteTimestamp2(vk_command_buffer(), VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, pool, _end);
+    vkCmdWriteTimestamp2(vkCommandBuffer(), VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, pool, _end);
 }
 
-void TimestampQuery::capture_from_pool(u32 slot, const u64* ticks, u32 count) {
+void TimestampQuery::captureFromPool(u32 slot, const u64* ticks, u32 count) {
     if(_state != State::Ended || _slot != slot || _begin == ~0u) {
         return;
     }
@@ -224,7 +224,7 @@ void TimestampQuery::capture_from_pool(u32 slot, const u64* ticks, u32 count) {
         return;
     }
 
-    _time = ticks_to_seconds(ticks[_begin], ticks[_end]);
+    _time = ticksToSeconds(ticks[_begin], ticks[_end]);
     _state = State::Resolved;
 }
 
@@ -241,7 +241,7 @@ Result<double> TimestampQuery::seconds(bool wait) const {
         return {true, _time};
     }
 
-    VkQueryPool pool = ctx().timestamp_pools[_slot];
+    VkQueryPool pool = ctx().timestampPools[_slot];
     if(!pool) {
         _time = 0.0;
         _state = State::Resolved;
@@ -250,25 +250,25 @@ Result<double> TimestampQuery::seconds(bool wait) const {
 
     const VkQueryResultFlags flags = VK_QUERY_RESULT_64_BIT | (wait ? VK_QUERY_RESULT_WAIT_BIT : 0);
 
-    u64 end_ticks = 0;
-    const VkResult end_result = vkGetQueryPoolResults(
-        vk_device(), pool, _end, 1, sizeof(end_ticks), &end_ticks, sizeof(end_ticks), flags
+    u64 endTicks = 0;
+    const VkResult endResult = vkGetQueryPoolResults(
+        vkDevice(), pool, _end, 1, sizeof(endTicks), &endTicks, sizeof(endTicks), flags
     );
-    if(end_result == VK_NOT_READY) {
+    if(endResult == VK_NOT_READY) {
         return {false, {}};
     }
-    vk_check(end_result);
+    vkCheck(endResult);
 
-    u64 begin_ticks = 0;
-    const VkResult begin_result = vkGetQueryPoolResults(
-        vk_device(), pool, _begin, 1, sizeof(begin_ticks), &begin_ticks, sizeof(begin_ticks), flags
+    u64 beginTicks = 0;
+    const VkResult beginResult = vkGetQueryPoolResults(
+        vkDevice(), pool, _begin, 1, sizeof(beginTicks), &beginTicks, sizeof(beginTicks), flags
     );
-    if(begin_result == VK_NOT_READY) {
+    if(beginResult == VK_NOT_READY) {
         return {false, {}};
     }
-    vk_check(begin_result);
+    vkCheck(beginResult);
 
-    _time = ticks_to_seconds(begin_ticks, end_ticks);
+    _time = ticksToSeconds(beginTicks, endTicks);
     _state = State::Resolved;
 
     return {true, _time};

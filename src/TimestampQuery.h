@@ -8,7 +8,7 @@
 
 namespace nebula {
 
-#define PROFILE_GPU(name_expr) auto CREATE_UNIQUE_NAME_WITH_PREFIX(gpu_prof) = ::nebula::ScopeGuard([zone_id = ::nebula::profile::begin_profile_zone(name_expr)] { ::nebula::profile::end_profile_zone(zone_id); })
+#define PROFILE_GPU(nameExpr) auto CREATE_UNIQUE_NAME_WITH_PREFIX(gpuProf) = ::nebula::ScopeGuard([zoneId = ::nebula::profile::beginProfileZone(nameExpr)] { ::nebula::profile::endProfileZone(zoneId); })
 
 
 class TimestampQuery : NonCopyable {
@@ -28,7 +28,7 @@ class TimestampQuery : NonCopyable {
 
         void swap(TimestampQuery& other);
 
-        static TimestampQuery create_and_begin();
+        static TimestampQuery createAndBegin();
 
         void begin();
         void end();
@@ -36,8 +36,8 @@ class TimestampQuery : NonCopyable {
         Result<double> seconds(bool wait = false) const;
 
     private:
-        void capture_from_pool(u32 slot, const u64* ticks, u32 count);
-        friend void reset_timestamp_queries();
+        void captureFromPool(u32 slot, const u64* ticks, u32 count);
+        friend void resetTimestampQueries();
 
         u32 _begin = ~0u;
         u32 _end = ~0u;
@@ -51,20 +51,20 @@ class TimestampQuery : NonCopyable {
 
 struct ProfileZone {
     std::string name;
-    u32 contained_zones = 0;
-    float cpu_time = 0.0f;
-    float gpu_time = 0.0f;
+    u32 containedZones = 0;
+    float cpuTime = 0.0f;
+    float gpuTime = 0.0f;
 };
 
-Span<ProfileZone> retrieve_profile();
-void process_profile_markers();
+Span<ProfileZone> retrieveProfile();
+void processProfileMarkers();
 
 
 namespace profile {
-    u32 begin_profile_zone(const char* name);
-    void end_profile_zone(u32 zone_id);
+    u32 beginProfileZone(const char* name);
+    void endProfileZone(u32 zoneId);
 
-    void destroy_profile();
+    void destroyProfile();
 }
 
 }

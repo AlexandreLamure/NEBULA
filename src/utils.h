@@ -9,7 +9,7 @@
 #include <array>
 
 #define FWD(var) std::forward<decltype(var)>(var)
-#define HASH(str) ([] { static constexpr u32 result = ::nebula::str_hash(str); return result; }())
+#define HASH(str) ([] { static constexpr u32 result = ::nebula::strHash(str); return result; }())
 
 // Execute expr at scope exit
 #define DEFER(expr) auto CREATE_UNIQUE_NAME_WITH_PREFIX(defer) = ::nebula::ScopeGuard([&] { expr; })
@@ -29,10 +29,10 @@
 namespace nebula {
 
 #ifdef OS_WIN
-bool running_in_debugger();
+bool runningInDebugger();
 #endif
 
-void break_in_debugger();
+void breakInDebugger();
 [[noreturn]] void fatal(const char* msg, const char* file = nullptr, int line = 0);
 
 using u8 = uint8_t;
@@ -67,17 +67,17 @@ struct NonMovable : NonCopyable {
 
 template<typename T>
 struct [[nodiscard]] Result {
-    bool is_ok;
+    bool isOk;
     T value;
 
-    const T& value_or(const T& default_val) const {
-        return is_ok ? value : default_val;
+    const T& valueOr(const T& defaultVal) const {
+        return isOk ? value : defaultVal;
     }
 };
 
 template<>
 struct [[nodiscard]] Result<void> {
-    bool is_ok;
+    bool isOk;
 };
 
 template<typename T>
@@ -101,10 +101,10 @@ class ScopeGuard {
 template<typename T>
 class Span {
     template<typename U>
-    static constexpr bool is_compat = std::is_constructible_v<T*, U>;
+    static constexpr bool isCompat = std::is_constructible_v<T*, U>;
 
     template<typename C>
-    using data_type = decltype(std::declval<C>().data());
+    using dataType = decltype(std::declval<C>().data());
 
     public:
         using value_type = T;
@@ -128,11 +128,11 @@ class Span {
         template<size_t N>
         inline constexpr Span(const std::array<std::remove_const_t<T>, N>& arr) : _data(arr.data()), _size(N) {}
 
-        template<typename C, typename = std::enable_if_t<is_compat<data_type<C>>>>
+        template<typename C, typename = std::enable_if_t<isCompat<dataType<C>>>>
         inline constexpr Span(C&& vec) : _data(vec.data()), _size(std::distance(vec.begin(), vec.end())) {}
 
         inline constexpr size_t size() const { return _size; }
-        inline constexpr bool is_empty() const { return !_size; }
+        inline constexpr bool isEmpty() const { return !_size; }
         inline constexpr T* data() { return _data; }
         inline constexpr const T* data() const { return _data; }
         inline constexpr const_iterator begin() const { return _data; }
@@ -153,7 +153,7 @@ class Span {
 };
 
 // Constexpr CRC-32 so HASH("foo") is a compile-time stand-in for a named uniform.
-inline constexpr u32 str_hash(std::string_view str, u32 seed = 0xCAFECAFE) {
+inline constexpr u32 strHash(std::string_view str, u32 seed = 0xCAFECAFE) {
     constexpr u32 lut[256] = {
         0x00000000,0x77073096,0xEE0E612C,0x990951BA,0x076DC419,0x706AF48F,0xE963A535,0x9E6495A3,0x0EDB8832,0x79DCB8A4,0xE0D5E91E,0x97D2D988,0x09B64C2B,0x7EB17CBD,0xE7B82D07,0x90BF1D91,
         0x1DB71064,0x6AB020F2,0xF3B97148,0x84BE41DE,0x1ADAD47D,0x6DDDE4EB,0xF4D4B551,0x83D385C7,0x136C9856,0x646BA8C0,0xFD62F97A,0x8A65C9EC,0x14015C4F,0x63066CD9,0xFA0F3D63,0x8D080DF5,
@@ -180,19 +180,19 @@ inline constexpr u32 str_hash(std::string_view str, u32 seed = 0xCAFECAFE) {
 }
 
 template<typename T>
-inline constexpr T to_rad(T deg) {
+inline constexpr T toRad(T deg) {
     return deg * T(0.01745329251994329576923690768489);
 }
 
 template<typename T>
-inline constexpr T to_deg(T rad) {
+inline constexpr T toDeg(T rad) {
     return rad * T(57.295779513082320876798154814105);
 }
 
-double program_time();
-Result<std::string> read_text_file(const std::string& file_name);
+double programTime();
+Result<std::string> readTextFile(const std::string& fileName);
 
-bool ends_with(std::string_view str, std::string_view suffix);
+bool endsWith(std::string_view str, std::string_view suffix);
 
 }
 

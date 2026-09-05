@@ -17,16 +17,16 @@ class ByteBuffer : NonCopyable {
         ByteBuffer(const void* data, size_t size);
         ~ByteBuffer();
 
-        VkBuffer vk_buffer() const { return _buffer; }
+        VkBuffer vkBuffer() const { return _buffer; }
 
-        size_t byte_size() const;
+        size_t byteSize() const;
 
-        BufferMapping<byte> map_bytes(AccessType access = AccessType::ReadWrite);
+        BufferMapping<byte> mapBytes(AccessType access = AccessType::ReadWrite);
 
     protected:
-        void* map_internal(AccessType access);
+        void* mapInternal(AccessType access);
         VmaAllocation allocation() const;
-        bool mapping_needs_flush() const;
+        bool mappingNeedsFlush() const;
 
     private:
         void swap(ByteBuffer& other);
@@ -35,7 +35,7 @@ class ByteBuffer : NonCopyable {
         VmaAllocation _allocation = nullptr;
         void* _mapped = nullptr;
         size_t _size = 0;
-        bool _needs_flush = false;
+        bool _needsFlush = false;
 };
 
 }

@@ -19,7 +19,7 @@ class SceneObject {
 
         const Material& material() const;
 
-        void set_transform(const glm::mat4& tr);
+        void setTransform(const glm::mat4& tr);
         const glm::mat4& transform() const;
 
     private:

@@ -21,17 +21,17 @@
 using namespace nebula;
 
 
-static float delta_time = 0.0f;
-static float sun_altitude = 45.0f;
-static float sun_azimuth = 45.0f;
-static float sun_intensity = 7.0f;
-static float ibl_intensity = 1.0f;
+static float deltaTime = 0.0f;
+static float sunAltitude = 45.0f;
+static float sunAzimuth = 45.0f;
+static float sunIntensity = 7.0f;
+static float iblIntensity = 1.0f;
 static float exposure = 0.33f;
 
 static std::unique_ptr<Scene> scene;
 static std::shared_ptr<Texture> envmap;
 
-void glfw_check(bool cond) {
+void glfwCheck(bool cond) {
     if(!cond) {
         const char* err = nullptr;
         glfwGetError(&err);
@@ -40,18 +40,18 @@ void glfw_check(bool cond) {
     }
 }
 
-void update_delta_time() {
+void updateDeltaTime() {
     static double time = 0.0;
-    const double new_time = program_time();
-    delta_time = float(new_time - time);
-    time = new_time;
+    const double newTime = programTime();
+    deltaTime = float(newTime - time);
+    time = newTime;
 }
 
-void process_inputs(GLFWwindow* window, Camera& camera) {
-    static glm::dvec2 mouse_pos;
+void processInputs(GLFWwindow* window, Camera& camera) {
+    static glm::dvec2 mousePos;
 
-    glm::dvec2 new_mouse_pos;
-    glfwGetCursorPos(window, &new_mouse_pos.x, &new_mouse_pos.y);
+    glm::dvec2 newMousePos;
+    glfwGetCursorPos(window, &newMousePos.x, &newMousePos.y);
 
     {
         glm::vec3 movement = {};
@@ -80,17 +80,17 @@ void process_inputs(GLFWwindow* window, Camera& camera) {
         }
 
         if(movement.length() > 0.0f) {
-            const glm::vec3 new_pos = camera.position() + movement * delta_time * speed;
-            camera.set_view(glm::lookAt(new_pos, new_pos + camera.forward(), camera.up()));
+            const glm::vec3 newPos = camera.position() + movement * deltaTime * speed;
+            camera.setView(glm::lookAt(newPos, newPos + camera.forward(), camera.up()));
         }
     }
 
     if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
-        const glm::vec2 delta = glm::vec2(mouse_pos - new_mouse_pos) * 0.01f;
+        const glm::vec2 delta = glm::vec2(mousePos - newMousePos) * 0.01f;
         if(delta.length() > 0.0f) {
             glm::mat4 rot = glm::rotate(glm::mat4(1.0f), delta.x, glm::vec3(0.0f, 1.0f, 0.0f));
             rot = glm::rotate(rot, delta.y, camera.right());
-            camera.set_view(glm::lookAt(camera.position(), camera.position() + (glm::mat3(rot) * camera.forward()), (glm::mat3(rot) * camera.up())));
+            camera.setView(glm::lookAt(camera.position(), camera.position() + (glm::mat3(rot) * camera.forward()), (glm::mat3(rot) * camera.up())));
         }
     }
 
@@ -98,44 +98,44 @@ void process_inputs(GLFWwindow* window, Camera& camera) {
         int width = 0;
         int height = 0;
         glfwGetWindowSize(window, &width, &height);
-        camera.set_ratio(float(width) / float(height));
+        camera.setRatio(float(width) / float(height));
     }
 
-    mouse_pos = new_mouse_pos;
+    mousePos = newMousePos;
 }
 
-void load_envmap(const std::string& filename) {
-    if(auto res = TextureData::from_file(filename); res.is_ok) {
-        envmap = std::make_shared<Texture>(Texture::cubemap_from_equirec(res.value));
-        scene->set_envmap(envmap);
+void loadEnvmap(const std::string& filename) {
+    if(auto res = TextureData::fromFile(filename); res.isOk) {
+        envmap = std::make_shared<Texture>(Texture::cubemapFromEquirec(res.value));
+        scene->setEnvmap(envmap);
     } else {
         std::cerr << "Unable to load envmap (" << filename << ")" << std::endl;
     }
 }
 
-void load_scene(const std::string& filename) {
-    if(auto res = Scene::from_gltf(filename); res.is_ok) {
+void loadScene(const std::string& filename) {
+    if(auto res = Scene::fromGltf(filename); res.isOk) {
         scene = std::move(res.value);
-        scene->set_envmap(envmap);
-        scene->set_ibl_intensity(ibl_intensity);
-        scene->set_sun(sun_altitude, sun_azimuth, glm::vec3(sun_intensity));
+        scene->setEnvmap(envmap);
+        scene->setIblIntensity(iblIntensity);
+        scene->setSun(sunAltitude, sunAzimuth, glm::vec3(sunIntensity));
     } else {
         std::cerr << "Unable to load scene (" << filename << ")" << std::endl;
     }
 }
 
-std::vector<std::string> list_data_files(Span<const std::string> extensions = {}) {
+std::vector<std::string> listDataFiles(Span<const std::string> extensions = {}) {
     std::vector<std::string> files;
     for(auto&& entry : std::filesystem::directory_iterator(NEBULA_DATA_PATH)) {
         if(entry.status().type() == std::filesystem::file_type::regular) {
             const auto ext = entry.path().extension();
 
-            bool ext_match = extensions.is_empty();
+            bool extMatch = extensions.isEmpty();
             for(const std::string& e : extensions) {
-                ext_match |= (ext == e);
+                extMatch |= (ext == e);
             }
 
-            if(ext_match) {
+            if(extMatch) {
                 files.emplace_back(entry.path().string());
             }
         }
@@ -144,18 +144,18 @@ std::vector<std::string> list_data_files(Span<const std::string> extensions = {}
 }
 
 template<typename F>
-bool load_file_window(Span<std::string> files, F&& load_func) {
+bool loadFileWindow(Span<std::string> files, F&& loadFunc) {
     char buffer[1024] = {};
     if(ImGui::InputText("Load file", buffer, sizeof(buffer), ImGuiInputTextFlags_EnterReturnsTrue)) {
-        load_func(buffer);
+        loadFunc(buffer);
         return true;
     }
 
-    if(!files.is_empty()) {
+    if(!files.isEmpty()) {
         for(const std::string& p : files) {
             const auto abs = std::filesystem::absolute(p).string();
             if(ImGui::MenuItem(abs.c_str())) {
-                load_func(p);
+                loadFunc(p);
                 return true;
             }
         }
@@ -166,25 +166,25 @@ bool load_file_window(Span<std::string> files, F&& load_func) {
 
 void gui(ImGuiRenderer& imgui) {
 
-    static bool open_gpu_profiler = false;
+    static bool openGpuProfiler = false;
 
     imgui.start();
     DEFER(imgui.finish());
 
 
-    static std::vector<std::string> load_files;
+    static std::vector<std::string> loadFiles;
 
     // ImGui::ShowDemoWindow();
 
-    bool open_scene_popup = false;
-    bool load_envmap_popup = false;
+    bool openScenePopup = false;
+    bool loadEnvmapPopup = false;
     if(ImGui::BeginMainMenuBar()) {
         if(ImGui::BeginMenu("File")) {
             if(ImGui::MenuItem("Open Scene")) {
-                open_scene_popup = true;
+                openScenePopup = true;
             }
             if(ImGui::MenuItem("Open Envmap")) {
-                load_envmap_popup = true;
+                loadEnvmapPopup = true;
             }
             ImGui::EndMenu();
         }
@@ -194,77 +194,77 @@ void gui(ImGuiRenderer& imgui) {
 
             ImGui::Separator();
 
-            ImGui::DragFloat("IBL intensity", &ibl_intensity, 0.01f, 0.0f, 1.0f);
-            scene->set_ibl_intensity(ibl_intensity);
+            ImGui::DragFloat("IBL intensity", &iblIntensity, 0.01f, 0.0f, 1.0f);
+            scene->setIblIntensity(iblIntensity);
 
             ImGui::Separator();
 
-            ImGui::DragFloat("Sun Altitude", &sun_altitude, 0.1f, 0.0f, 90.0f, "%.0f");
-            ImGui::DragFloat("Sun Azimuth", &sun_azimuth, 0.1f, 0.0f, 360.0f, "%.0f");
-            ImGui::DragFloat("Sun Intensity", &sun_intensity, 0.05f, 0.0f, 100.0f, "%.1f");
-            scene->set_sun(sun_altitude, sun_azimuth, glm::vec3(sun_intensity));
+            ImGui::DragFloat("Sun Altitude", &sunAltitude, 0.1f, 0.0f, 90.0f, "%.0f");
+            ImGui::DragFloat("Sun Azimuth", &sunAzimuth, 0.1f, 0.0f, 360.0f, "%.0f");
+            ImGui::DragFloat("Sun Intensity", &sunIntensity, 0.05f, 0.0f, 100.0f, "%.1f");
+            scene->setSun(sunAltitude, sunAzimuth, glm::vec3(sunIntensity));
 
             ImGui::EndMenu();
         }
 
         if(scene && ImGui::BeginMenu("Scene Info")) {
             ImGui::Text("%u objects", u32(scene->objects().size()));
-            ImGui::Text("%u point lights", u32(scene->point_lights().size()));
+            ImGui::Text("%u point lights", u32(scene->pointLights().size()));
             ImGui::EndMenu();
         }
 
         if(ImGui::MenuItem("Profiler")) {
-            open_gpu_profiler = true;
+            openGpuProfiler = true;
         }
 
         ImGui::Separator();
-        ImGui::TextUnformatted(device_name().c_str());
+        ImGui::TextUnformatted(deviceName().c_str());
 
         ImGui::Separator();
-        ImGui::Text("%.2f ms", delta_time * 1000.0f);
+        ImGui::Text("%.2f ms", deltaTime * 1000.0f);
 
 #ifdef NEBULA_DEBUG
         ImGui::Separator();
-        const ImVec4 warning_text_color = ImVec4(1.0f, 0.8f, 0.4f, 1.0f);
-        ImGui::TextColored(warning_text_color, ICON_FA_BUG " (DEBUG)");
+        const ImVec4 warningTextColor = ImVec4(1.0f, 0.8f, 0.4f, 1.0f);
+        ImGui::TextColored(warningTextColor, ICON_FA_BUG " (DEBUG)");
 #endif
 
         ImGui::EndMainMenuBar();
     }
 
-    if(open_scene_popup) {
+    if(openScenePopup) {
         ImGui::OpenPopup("###openscenepopup");
 
         const std::array<std::string, 2> extensions = {".gltf", ".glb"};
-        load_files = list_data_files(extensions);
+        loadFiles = listDataFiles(extensions);
     }
 
     if(ImGui::BeginPopup("###openscenepopup", ImGuiWindowFlags_AlwaysAutoResize)) {
-        if(load_file_window(load_files, load_scene)) {
+        if(loadFileWindow(loadFiles, loadScene)) {
             ImGui::CloseCurrentPopup();
         }
 
         ImGui::EndPopup();
     }
 
-    if(load_envmap_popup) {
+    if(loadEnvmapPopup) {
         ImGui::OpenPopup("###openenvmappopup");
 
         const std::array<std::string, 3> extensions = {".png", ".jpg", ".tga"};
-        load_files = list_data_files(extensions);
+        loadFiles = listDataFiles(extensions);
     }
 
     if(ImGui::BeginPopup("###openenvmappopup", ImGuiWindowFlags_AlwaysAutoResize)) {
-        if(load_file_window(load_files, load_envmap)) {
+        if(loadFileWindow(loadFiles, loadEnvmap)) {
             ImGui::CloseCurrentPopup();
         }
 
         ImGui::EndPopup();
     }
 
-    if(open_gpu_profiler) {
+    if(openGpuProfiler) {
         if(ImGui::Begin(ICON_FA_CLOCK " GPU Profiler")) {
-            const ImGuiTableFlags table_flags =
+            const ImGuiTableFlags tableFlags =
                 ImGuiTableFlags_SortTristate |
                 ImGuiTableFlags_NoSavedSettings |
                 ImGuiTableFlags_SizingFixedFit |
@@ -275,15 +275,15 @@ void gui(ImGuiRenderer& imgui) {
             ImGui::PushStyleColor(ImGuiCol_TableRowBgAlt, ImVec4(1, 1, 1, 0.01f));
             DEFER(ImGui::PopStyleColor());
 
-            if(ImGui::BeginTable("##timetable", 3, table_flags)) {
+            if(ImGui::BeginTable("##timetable", 3, tableFlags)) {
                 ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableSetupColumn("CPU (ms)", ImGuiTableColumnFlags_NoResize, 70.0f);
                 ImGui::TableSetupColumn("GPU (ms)", ImGuiTableColumnFlags_NoResize, 70.0f);
                 ImGui::TableHeadersRow();
 
                 std::vector<u32> indents;
-                for(const auto& zone : retrieve_profile()) {
-                    auto color_from_time = [](float time) {
+                for(const auto& zone : retrieveProfile()) {
+                    auto colorFromTime = [](float time) {
                         const float t = std::min(time / 0.008f, 1.0f); // 8ms = red
                         return ImVec4(t, 1.0f - t, 0.0f, 1.0f);
                     };
@@ -293,12 +293,12 @@ void gui(ImGuiRenderer& imgui) {
                     ImGui::TextUnformatted(zone.name.data());
 
                     ImGui::TableSetColumnIndex(1);
-                    ImGui::PushStyleColor(ImGuiCol_Text, color_from_time(zone.cpu_time));
-                    ImGui::Text("%.2f", zone.cpu_time * 1000.0f);
+                    ImGui::PushStyleColor(ImGuiCol_Text, colorFromTime(zone.cpuTime));
+                    ImGui::Text("%.2f", zone.cpuTime * 1000.0f);
 
                     ImGui::TableSetColumnIndex(2);
-                    ImGui::PushStyleColor(ImGuiCol_Text, color_from_time(zone.gpu_time));
-                    ImGui::Text("%.2f", zone.gpu_time * 1000.0f);
+                    ImGui::PushStyleColor(ImGuiCol_Text, colorFromTime(zone.gpuTime));
+                    ImGui::Text("%.2f", zone.gpuTime * 1000.0f);
 
                     ImGui::PopStyleColor(2);
 
@@ -307,8 +307,8 @@ void gui(ImGuiRenderer& imgui) {
                         ImGui::Unindent();
                     }
 
-                    if(zone.contained_zones) {
-                        indents.push_back(zone.contained_zones);
+                    if(zone.containedZones) {
+                        indents.push_back(zone.containedZones);
                         ImGui::Indent();
                     }
                 }
@@ -323,24 +323,24 @@ void gui(ImGuiRenderer& imgui) {
 
 
 
-void load_default_scene() {
-    load_scene(std::string(NEBULA_DATA_PATH) + "DamagedHelmet.glb");
-    load_envmap(std::string(NEBULA_DATA_PATH) + "pretoria_gardens.jpg");
+void loadDefaultScene() {
+    loadScene(std::string(NEBULA_DATA_PATH) + "DamagedHelmet.glb");
+    loadEnvmap(std::string(NEBULA_DATA_PATH) + "pretoria_gardens.jpg");
 
     // Add lights
     {
         PointLight light;
-        light.set_position(glm::vec3(1.0f, 2.0f, 4.0f));
-        light.set_color(glm::vec3(0.0f, 50.0f, 0.0f));
-        light.set_radius(100.0f);
-        scene->add_light(std::move(light));
+        light.setPosition(glm::vec3(1.0f, 2.0f, 4.0f));
+        light.setColor(glm::vec3(0.0f, 50.0f, 0.0f));
+        light.setRadius(100.0f);
+        scene->addLight(std::move(light));
     }
     {
         PointLight light;
-        light.set_position(glm::vec3(1.0f, 2.0f, -4.0f));
-        light.set_color(glm::vec3(50.0f, 0.0f, 0.0f));
-        light.set_radius(50.0f);
-        scene->add_light(std::move(light));
+        light.setPosition(glm::vec3(1.0f, 2.0f, -4.0f));
+        light.setColor(glm::vec3(50.0f, 0.0f, 0.0f));
+        light.setRadius(50.0f);
+        scene->addLight(std::move(light));
     }
 }
 
@@ -348,17 +348,17 @@ struct RendererState {
     void resize(glm::uvec2 size) {
         this->size = size;
         if(size.x > 0 && size.y > 0) {
-            depth_texture = Texture(size, ImageFormat::Depth32_FLOAT, WrapMode::Clamp);
-            lit_hdr_texture = Texture(size, ImageFormat::RGBA16_FLOAT, WrapMode::Clamp);
-            tone_mapped_texture = Texture(size, ImageFormat::RGBA8_UNORM, WrapMode::Clamp);
+            depthTexture = Texture(size, ImageFormat::Depth32_FLOAT, WrapMode::Clamp);
+            litHdrTexture = Texture(size, ImageFormat::RGBA16_FLOAT, WrapMode::Clamp);
+            toneMappedTexture = Texture(size, ImageFormat::RGBA8_UNORM, WrapMode::Clamp);
         }
     }
 
     glm::uvec2 size = {};
 
-    Texture depth_texture;
-    Texture lit_hdr_texture;
-    Texture tone_mapped_texture;
+    Texture depthTexture;
+    Texture litHdrTexture;
+    Texture toneMappedTexture;
 };
 
 
@@ -368,20 +368,20 @@ struct RendererState {
 int main() {
     DEBUG_ASSERT([] { std::cout << "Debug asserts enabled" << std::endl; return true; }());
 
-    glfw_check(glfwInit());
+    glfwCheck(glfwInit());
     DEFER(glfwTerminate());
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     GLFWwindow* window = glfwCreateWindow(1600, 900, "nebula", nullptr, nullptr);
-    glfw_check(window);
+    glfwCheck(window);
     DEFER(glfwDestroyWindow(window));
 
-    init_graphics(window);
+    initGraphics(window);
 
     std::unique_ptr<ImGuiRenderer> imgui = std::make_unique<ImGuiRenderer>(window);
 
-    load_default_scene();
+    loadDefaultScene();
 
-    auto tonemap_program = Program::from_files("screen.slang", "tonemap.slang");
+    auto tonemapProgram = Program::fromFiles("screen.slang", "tonemap.slang");
     RendererState renderer;
 
     for(;;) {
@@ -390,7 +390,7 @@ int main() {
             break;
         }
 
-        process_profile_markers();
+        processProfileMarkers();
 
         {
             int width = 0;
@@ -399,48 +399,48 @@ int main() {
 
             if(renderer.size != glm::uvec2(width, height)) {
                 // GPU may still be sampling last frame's HDR/depth; wait before rebuilding them.
-                wait_for_gpu_idle();
+                waitForGpuIdle();
                 renderer.resize(glm::uvec2(width, height));
             }
         }
 
-        update_delta_time();
+        updateDeltaTime();
 
         if(const auto& io = ImGui::GetIO(); !io.WantCaptureMouse && !io.WantCaptureKeyboard) {
-            process_inputs(window, scene->camera());
+            processInputs(window, scene->camera());
         }
 
-        begin_frame();
+        beginFrame();
         {
             PROFILE_GPU("Frame");
 
             // Render the scene
-            RenderPass(&renderer.depth_texture, std::array{&renderer.lit_hdr_texture}, true, true, "Main pass", [&] {
+            RenderPass(&renderer.depthTexture, std::array{&renderer.litHdrTexture}, true, true, "Main pass", [&] {
                 scene->render();
             });
 
             // Apply a tonemap as a full screen pass
-            RenderPass(nullptr, std::array{&renderer.tone_mapped_texture}, false, true, "Tonemap", [&] {
+            RenderPass(nullptr, std::array{&renderer.toneMappedTexture}, false, true, "Tonemap", [&] {
                 PushConstants push;
                 push.set(HASH("exposure"), exposure);
                 PassResources pass{};
-                pass.textures[0] = &renderer.lit_hdr_texture;
+                pass.textures[0] = &renderer.litHdrTexture;
                 const RasterState raster{
-                    .depth_test_enable = false,
-                    .cull_mode = VK_CULL_MODE_NONE,
+                    .depthTestEnable = false,
+                    .cullMode = VK_CULL_MODE_NONE,
                 };
-                draw_fullscreen(*tonemap_program, raster, pass, push);
+                drawFullscreen(*tonemapProgram, raster, pass, push);
             });
 
             RenderPass(RenderPass::Swapchain{}, false, "Blit", [&] {
-                blit_to_screen(renderer.tone_mapped_texture);
+                blitToScreen(renderer.toneMappedTexture);
             });
 
             RenderPass(RenderPass::Swapchain{}, false, "GUI", [&] {
                 gui(*imgui);
             });
         }
-        end_frame();
+        endFrame();
     }
 
 
@@ -448,7 +448,7 @@ int main() {
     scene = nullptr;
     envmap = nullptr;
     imgui = nullptr;
-    tonemap_program = nullptr;
+    tonemapProgram = nullptr;
     renderer = {};
-    destroy_graphics();
+    destroyGraphics();
 }

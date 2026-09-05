@@ -17,38 +17,38 @@ class RenderPass : NonCopyable {
         struct Swapchain {};
 
         template<size_t N, typename Fn>
-        RenderPass(Texture* depth, std::array<Texture*, N> colors, bool clear_depth, bool clear_color, const char* name, Fn&& fn)
-            : RenderPass(depth, colors.data(), colors.size(), clear_depth, clear_color, name, std::forward<Fn>(fn)) {
+        RenderPass(Texture* depth, std::array<Texture*, N> colors, bool clearDepth, bool clearColor, const char* name, Fn&& fn)
+            : RenderPass(depth, colors.data(), colors.size(), clearDepth, clearColor, name, std::forward<Fn>(fn)) {
         }
 
         template<typename Fn>
-        RenderPass(Texture* depth, bool clear_depth, const char* name, Fn&& fn)
-            : RenderPass(depth, nullptr, 0, clear_depth, false, name, std::forward<Fn>(fn)) {
+        RenderPass(Texture* depth, bool clearDepth, const char* name, Fn&& fn)
+            : RenderPass(depth, nullptr, 0, clearDepth, false, name, std::forward<Fn>(fn)) {
         }
 
         template<typename Fn>
-        RenderPass(Swapchain, bool clear_color, const char* name, Fn&& fn) {
-            begin_swapchain(clear_color);
+        RenderPass(Swapchain, bool clearColor, const char* name, Fn&& fn) {
+            beginSwapchain(clearColor);
             {
                 PROFILE_GPU(name);
                 std::forward<Fn>(fn)();
             }
-            end_rendering_if_active();
+            endRenderingIfActive();
         }
 
     private:
         template<typename Fn>
-        RenderPass(Texture* depth, Texture* const* colors, size_t count, bool clear_depth, bool clear_color, const char* name, Fn&& fn) {
-            begin_offscreen(depth, colors, count, clear_depth, clear_color);
+        RenderPass(Texture* depth, Texture* const* colors, size_t count, bool clearDepth, bool clearColor, const char* name, Fn&& fn) {
+            beginOffscreen(depth, colors, count, clearDepth, clearColor);
             {
                 PROFILE_GPU(name);
                 std::forward<Fn>(fn)();
             }
-            end_rendering_if_active();
+            endRenderingIfActive();
         }
 
-        static void begin_offscreen(Texture* depth, Texture* const* colors, size_t count, bool clear_depth, bool clear_color);
-        static void begin_swapchain(bool clear_color);
+        static void beginOffscreen(Texture* depth, Texture* const* colors, size_t count, bool clearDepth, bool clearColor);
+        static void beginSwapchain(bool clearColor);
 };
 
 }

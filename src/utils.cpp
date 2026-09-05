@@ -14,22 +14,22 @@
 namespace nebula {
 
 #ifdef OS_WIN
-bool running_in_debugger() {
+bool runningInDebugger() {
     return IsDebuggerPresent();
 }
 #endif
 
-void break_in_debugger() {
+void breakInDebugger() {
 #ifdef OS_WIN
-    if(running_in_debugger()) {
+    if(runningInDebugger()) {
         DebugBreak();
     }
 #endif
 #ifdef OS_LINUX
-    static bool handler_setup = false;
-    if(!handler_setup) {
+    static bool handlerSetup = false;
+    if(!handlerSetup) {
         std::signal(SIGTRAP, [](int) {});
-        handler_setup = true;
+        handlerSetup = true;
     }
     std::raise(SIGTRAP);
 #endif
@@ -48,20 +48,20 @@ void fatal(const char* msg, const char* file, int line) {
 
     std::cerr << std::endl;
 
-    break_in_debugger();
+    breakInDebugger();
     std::terminate();
 }
 
 
-static const auto start_time = std::chrono::high_resolution_clock::now();
+static const auto startTime = std::chrono::high_resolution_clock::now();
 
-double program_time() {
+double programTime() {
     using Seconds = std::chrono::duration<double>;
-    return std::chrono::duration_cast<Seconds>(std::chrono::high_resolution_clock::now() - start_time).count();
+    return std::chrono::duration_cast<Seconds>(std::chrono::high_resolution_clock::now() - startTime).count();
 }
 
-Result<std::string> read_text_file(const std::string& file_name) {
-    if(FILE* file = std::fopen(file_name.data(), "r")) {
+Result<std::string> readTextFile(const std::string& fileName) {
+    if(FILE* file = std::fopen(fileName.data(), "r")) {
         DEFER(std::fclose(file));
 
         std::fpos_t pos = {};
@@ -85,7 +85,7 @@ Result<std::string> read_text_file(const std::string& file_name) {
 }
 
 
-bool ends_with(std::string_view str, std::string_view suffix) {
+bool endsWith(std::string_view str, std::string_view suffix) {
     if(str.size() < suffix.size()) {
         return false;
     }

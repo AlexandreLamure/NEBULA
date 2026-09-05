@@ -38,49 +38,49 @@ public float attenuation(float distance, float radius, float falloff) {
     return attenuation(distance * falloff, radius * falloff);
 }
 
-public float sRGB_to_linear(float x) {
+public float sRGBToLinear(float x) {
     if(x <= 0.04045) {
         return x / 12.92;
     }
     return pow((x + 0.055) / 1.055, 2.4);
 }
 
-public float linear_to_sRGB(float x) {
+public float linearToSRGB(float x) {
     if(x <= 0.0031308) {
         return x * 12.92;
     }
     return 1.055 * pow(x, 1.0 / 2.4) - 0.055;
 }
 
-public float3 sRGB_to_linear(float3 v) {
-    return float3(sRGB_to_linear(v.r), sRGB_to_linear(v.g), sRGB_to_linear(v.b));
+public float3 sRGBToLinear(float3 v) {
+    return float3(sRGBToLinear(v.r), sRGBToLinear(v.g), sRGBToLinear(v.b));
 }
 
-public float3 linear_to_sRGB(float3 v) {
-    return float3(linear_to_sRGB(v.r), linear_to_sRGB(v.g), linear_to_sRGB(v.b));
+public float3 linearToSRGB(float3 v) {
+    return float3(linearToSRGB(v.r), linearToSRGB(v.g), linearToSRGB(v.b));
 }
 
 // Maps two-channel [0,1] XY to tangent-space [-1,1] and reconstructs Z as 1 - length(xy).
-public float3 unpack_normal_map(float2 normal) {
+public float3 unpackNormalMap(float2 normal) {
     normal = normal * 2.0 - float2(1.0, 1.0);
     return float3(normal, 1.0 - sqrt(dot(normal, normal)));
 }
 
 // Maps a unit direction to lat-long UV (atan2/asin scaled by 1/2π and 1/π).
-public float2 to_equirec(float3 v) {
+public float2 toEquirec(float3 v) {
     return -float2(atan2(-v.y, v.x), asin(v.z)) * float2(0.1591, 0.3183) + 0.5;
 }
 
 // Homogeneous divide after multiplying NDC by the inverse view-projection.
-public float3 unproject_ndc(float3 ndc, float4x4 inv_matrix) {
-    const float4 p = mul(inv_matrix, float4(ndc, 1.0));
+public float3 unprojectNDC(float3 ndc, float4x4 invMatrix) {
+    const float4 p = mul(invMatrix, float4(ndc, 1.0));
     return p.xyz / p.w;
 }
 
 // Builds NDC from UV and depth then unprojects to world (depth 1 is near under reverse-Z).
-public float3 unproject(float2 uv, float depth, float4x4 inv_matrix) {
+public float3 unproject(float2 uv, float depth, float4x4 invMatrix) {
     const float3 ndc = float3(uv * 2.0 - 1.0, depth);
-    return unproject_ndc(ndc, inv_matrix);
+    return unprojectNDC(ndc, invMatrix);
 }
 
 // 2D low-discrepancy sample: i/N plus the van der Corput radical inverse (bit-reversed i / 2^32).
@@ -94,13 +94,13 @@ public float2 hammersley(uint i, uint N) {
 }
 
 // Samples a GGX half-vector from Xi, then rotates it from tangent space into the world around N.
-public float3 importance_sample_ggx(float2 Xi, float3 N, float roughness) {
+public float3 importanceSampleGGX(float2 Xi, float3 N, float roughness) {
     float a = roughness * roughness;
 
     const float phi = 2.0 * PI * Xi.x;
-    const float cos_theta = sqrt((1.0 - Xi.y) / (1.0 + (a * a - 1.0) * Xi.y));
-    const float sin_theta = sqrt(1.0 - cos_theta * cos_theta);
-    const float3 H = float3(cos(phi) * sin_theta, sin(phi) * sin_theta, cos_theta);
+    const float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a * a - 1.0) * Xi.y));
+    const float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+    const float3 H = float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
     const float3 up = abs(N.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
     const float3 tangent = normalize(cross(up, N));
     const float3 bitangent = cross(N, tangent);
@@ -109,16 +109,16 @@ public float3 importance_sample_ggx(float2 Xi, float3 N, float roughness) {
 }
 
 // Smith-Schlick G1 with IBL k = a²/2 (Karis), used when integrating the BRDF LUT.
-public float geometry_schlick_ggx(float NdotV, float roughness) {
+public float geometrySchlickGGX(float NdotV, float roughness) {
     const float k = (roughness * roughness) / 2.0;
     const float denom = NdotV * (1.0 - k) + k;
 
     return NdotV / denom;
 }
 
-public float geometry_smith(float3 N, float3 V, float3 L, float roughness) {
-    const float ggx2 = geometry_schlick_ggx(max(dot(N, V), 0.0), roughness);
-    const float ggx1 = geometry_schlick_ggx(max(dot(N, L), 0.0), roughness);
+public float geometrySmith(float3 N, float3 V, float3 L, float roughness) {
+    const float ggx2 = geometrySchlickGGX(max(dot(N, V), 0.0), roughness);
+    const float ggx1 = geometrySchlickGGX(max(dot(N, L), 0.0), roughness);
 
     return ggx1 * ggx2;
 }

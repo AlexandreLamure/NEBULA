@@ -16,16 +16,16 @@ void SceneObject::render() const {
         return;
     }
 
-    PushConstants push = _material->build_push_constants();
+    PushConstants push = _material->buildPushConstants();
     push.set(HASH("model"), transform());
-    draw_mesh(
+    drawMesh(
         _material->program(),
-        _material->raster_state(),
-        _material->pass_resources(),
+        _material->rasterState(),
+        _material->passResources(),
         push,
-        _mesh->vertex_buffer(),
-        _mesh->index_buffer(),
-        _mesh->index_count()
+        _mesh->vertexBuffer(),
+        _mesh->indexBuffer(),
+        _mesh->indexCount()
     );
 }
 
@@ -34,7 +34,7 @@ const Material& SceneObject::material() const {
     return *_material;
 }
 
-void SceneObject::set_transform(const glm::mat4& tr) {
+void SceneObject::setTransform(const glm::mat4& tr) {
     _transform = tr;
 }
 

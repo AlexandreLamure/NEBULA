@@ -5,7 +5,7 @@
 namespace nebula {
 
 // RGB8 maps to RGBA8 — RGB8 is poorly supported as an optimal Vulkan format.
-VkFormat image_format_to_vk(ImageFormat format) {
+VkFormat imageFormatToVk(ImageFormat format) {
     switch(format) {
         case ImageFormat::RGBA8_UNORM:   return VK_FORMAT_R8G8B8A8_UNORM;
         case ImageFormat::RGBA8_sRGB:    return VK_FORMAT_R8G8B8A8_SRGB;

@@ -8,7 +8,7 @@
 #include "Texture.h"
 #include "graphics.h"
 #include "ImageFormat.h"
-#include "shader_structs.h"
+#include "shaderStructs.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -19,12 +19,12 @@
 namespace nebula {
 
 // Singleton containing the Vulkan context.
-static GraphicsContext g_ctx;
+static GraphicsContext gCtx;
 GraphicsContext& ctx() {
-    return g_ctx;
+    return gCtx;
 }
 
-void vk_check_impl(VkResult result, const char* call, const char* file, int line) {
+void vkCheckImpl(VkResult result, const char* call, const char* file, int line) {
     if(result == VK_SUCCESS) {
         return;
     }
@@ -34,7 +34,7 @@ void vk_check_impl(VkResult result, const char* call, const char* file, int line
 }
 
 #ifdef NEBULA_DEBUG
-static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
+static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT severity,
     VkDebugUtilsMessageTypeFlagsEXT,
     const VkDebugUtilsMessengerCallbackDataEXT* data,
@@ -44,17 +44,17 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
         return VK_FALSE;
     }
 
-    const bool is_error = (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT);
-    (is_error ? std::cerr : std::cout) << (is_error ? "[VK][ERROR] " : "[VK] ")
+    const bool isError = (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT);
+    (isError ? std::cerr : std::cout) << (isError ? "[VK][ERROR] " : "[VK] ")
                                        << data->pMessage << std::endl;
 
-    if(is_error) {
-        break_in_debugger();
+    if(isError) {
+        breakInDebugger();
     }
     return VK_FALSE;
 }
 
-static bool has_instance_layer(const char* name) {
+static bool hasInstanceLayer(const char* name) {
     u32 count = 0;
     vkEnumerateInstanceLayerProperties(&count, nullptr);
     std::vector<VkLayerProperties> layers(count);
@@ -67,7 +67,7 @@ static bool has_instance_layer(const char* name) {
     return false;
 }
 
-static VkDebugUtilsMessengerCreateInfoEXT debug_messenger_info() {
+static VkDebugUtilsMessengerCreateInfoEXT debugMessengerInfo() {
     return {
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
         .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
@@ -75,12 +75,12 @@ static VkDebugUtilsMessengerCreateInfoEXT debug_messenger_info() {
         .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
                      | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
                      | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
-        .pfnUserCallback = debug_callback,
+        .pfnUserCallback = debugCallback,
     };
 }
 #endif
 
-static bool has_device_extension(VkPhysicalDevice physical, const char* name) {
+static bool hasDeviceExtension(VkPhysicalDevice physical, const char* name) {
     u32 count = 0;
     vkEnumerateDeviceExtensionProperties(physical, nullptr, &count, nullptr);
     std::vector<VkExtensionProperties> exts(count);
@@ -93,7 +93,7 @@ static bool has_device_extension(VkPhysicalDevice physical, const char* name) {
     return false;
 }
 
-static bool find_graphics_present_queue(VkPhysicalDevice physical, VkSurfaceKHR surface, u32* out_family) {
+static bool findGraphicsPresentQueue(VkPhysicalDevice physical, VkSurfaceKHR surface, u32* outFamily) {
     u32 count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physical, &count, nullptr);
     std::vector<VkQueueFamilyProperties> families(count);
@@ -106,14 +106,14 @@ static bool find_graphics_present_queue(VkPhysicalDevice physical, VkSurfaceKHR 
         VkBool32 present = VK_FALSE;
         vkGetPhysicalDeviceSurfaceSupportKHR(physical, i, surface, &present);
         if(present) {
-            *out_family = i;
+            *outFamily = i;
             return true;
         }
     }
     return false;
 }
 
-static int rate_device(VkPhysicalDevice physical, VkSurfaceKHR surface, u32* out_family) {
+static int rateDevice(VkPhysicalDevice physical, VkSurfaceKHR surface, u32* outFamily) {
     VkPhysicalDeviceProperties props{};
     vkGetPhysicalDeviceProperties(physical, &props);
     if(props.apiVersion < VK_API_VERSION_1_3) {
@@ -133,14 +133,14 @@ static int rate_device(VkPhysicalDevice physical, VkSurfaceKHR surface, u32* out
         return 0;
     }
 
-    if(!has_device_extension(physical, VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
+    if(!hasDeviceExtension(physical, VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
         return 0;
     }
-    if(!has_device_extension(physical, VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME)) {
+    if(!hasDeviceExtension(physical, VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME)) {
         return 0;
     }
 
-    if(!find_graphics_present_queue(physical, surface, out_family)) {
+    if(!findGraphicsPresentQueue(physical, surface, outFamily)) {
         return 0;
     }
 
@@ -153,44 +153,44 @@ static int rate_device(VkPhysicalDevice physical, VkSurfaceKHR surface, u32* out
     return score;
 }
 
-static void destroy_swapchain() {
-    for(VkSemaphore sem : g_ctx.swapchain_render_semaphores) {
-        vkDestroySemaphore(g_ctx.device, sem, nullptr);
+static void destroySwapchain() {
+    for(VkSemaphore sem : gCtx.swapchainRenderSemaphores) {
+        vkDestroySemaphore(gCtx.device, sem, nullptr);
     }
-    g_ctx.swapchain_render_semaphores.clear();
+    gCtx.swapchainRenderSemaphores.clear();
 
-    for(VkImageView view : g_ctx.swapchain_views) {
-        vkDestroyImageView(g_ctx.device, view, nullptr);
+    for(VkImageView view : gCtx.swapchainViews) {
+        vkDestroyImageView(gCtx.device, view, nullptr);
     }
-    g_ctx.swapchain_views.clear();
-    g_ctx.swapchain_images.clear();
+    gCtx.swapchainViews.clear();
+    gCtx.swapchainImages.clear();
 
-    if(g_ctx.swapchain) {
-        vkDestroySwapchainKHR(g_ctx.device, g_ctx.swapchain, nullptr);
-        g_ctx.swapchain = VK_NULL_HANDLE;
+    if(gCtx.swapchain) {
+        vkDestroySwapchainKHR(gCtx.device, gCtx.swapchain, nullptr);
+        gCtx.swapchain = VK_NULL_HANDLE;
     }
 }
 
-static void destroy_frames() {
-    for(InFlightFrame& frame : g_ctx.frames) {
-        if(frame.command_pool) {
-            vkDestroyCommandPool(g_ctx.device, frame.command_pool, nullptr);
+static void destroyFrames() {
+    for(InFlightFrame& frame : gCtx.frames) {
+        if(frame.commandPool) {
+            vkDestroyCommandPool(gCtx.device, frame.commandPool, nullptr);
         }
         if(frame.submitted) {
-            vkDestroyFence(g_ctx.device, frame.submitted, nullptr);
+            vkDestroyFence(gCtx.device, frame.submitted, nullptr);
         }
         if(frame.acquire) {
-            vkDestroySemaphore(g_ctx.device, frame.acquire, nullptr);
+            vkDestroySemaphore(gCtx.device, frame.acquire, nullptr);
         }
         frame = {};
     }
 }
 
-static VkSurfaceFormatKHR pick_surface_format(VkPhysicalDevice physical, VkSurfaceKHR surface) {
+static VkSurfaceFormatKHR pickSurfaceFormat(VkPhysicalDevice physical, VkSurfaceKHR surface) {
     u32 count = 0;
-    vk_check(vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &count, nullptr));
+    vkCheck(vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &count, nullptr));
     std::vector<VkSurfaceFormatKHR> formats(count);
-    vk_check(vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &count, formats.data()));
+    vkCheck(vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &count, formats.data()));
 
     for(const VkSurfaceFormatKHR& format : formats) {
         if(format.format == VK_FORMAT_B8G8R8A8_SRGB && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
@@ -201,7 +201,7 @@ static VkSurfaceFormatKHR pick_surface_format(VkPhysicalDevice physical, VkSurfa
     return formats[0];
 }
 
-static VkExtent2D pick_swapchain_extent(const VkSurfaceCapabilitiesKHR& caps) {
+static VkExtent2D pickSwapchainExtent(const VkSurfaceCapabilitiesKHR& caps) {
     // Wayland (and some other platforms) reports currentExtent as 0xFFFFFFFF:
     // the window size is not known to the driver, so we must pass GLFW's framebuffer size.
     if(caps.currentExtent.width != 0xFFFFFFFFu) {
@@ -210,7 +210,7 @@ static VkExtent2D pick_swapchain_extent(const VkSurfaceCapabilitiesKHR& caps) {
 
     int width = 0;
     int height = 0;
-    glfwGetFramebufferSize(g_ctx.window, &width, &height);
+    glfwGetFramebufferSize(gCtx.window, &width, &height);
 
     VkExtent2D extent{u32(width), u32(height)};
     extent.width = std::max(caps.minImageExtent.width, std::min(caps.maxImageExtent.width, extent.width));
@@ -218,25 +218,25 @@ static VkExtent2D pick_swapchain_extent(const VkSurfaceCapabilitiesKHR& caps) {
     return extent;
 }
 
-static void create_swapchain() {
+static void createSwapchain() {
     VkSurfaceCapabilitiesKHR caps{};
-    vk_check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(g_ctx.physical_device, g_ctx.surface, &caps));
+    vkCheck(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gCtx.physicalDevice, gCtx.surface, &caps));
 
-    const VkSurfaceFormatKHR surface_format = pick_surface_format(g_ctx.physical_device, g_ctx.surface);
-    const VkExtent2D extent = pick_swapchain_extent(caps);
+    const VkSurfaceFormatKHR surfaceFormat = pickSurfaceFormat(gCtx.physicalDevice, gCtx.surface);
+    const VkExtent2D extent = pickSwapchainExtent(caps);
     ALWAYS_ASSERT(extent.width && extent.height, "Swapchain extent is zero");
 
-    u32 image_count = caps.minImageCount + 1;
-    if(caps.maxImageCount && image_count > caps.maxImageCount) {
-        image_count = caps.maxImageCount;
+    u32 imageCount = caps.minImageCount + 1;
+    if(caps.maxImageCount && imageCount > caps.maxImageCount) {
+        imageCount = caps.maxImageCount;
     }
 
-    const VkSwapchainCreateInfoKHR swapchain_ci{
+    const VkSwapchainCreateInfoKHR swapchainCi{
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-        .surface = g_ctx.surface,
-        .minImageCount = image_count,
-        .imageFormat = surface_format.format,
-        .imageColorSpace = surface_format.colorSpace,
+        .surface = gCtx.surface,
+        .minImageCount = imageCount,
+        .imageFormat = surfaceFormat.format,
+        .imageColorSpace = surfaceFormat.colorSpace,
         .imageExtent = extent,
         .imageArrayLayers = 1,
         .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -246,182 +246,182 @@ static void create_swapchain() {
         .presentMode = VK_PRESENT_MODE_FIFO_KHR,
         .clipped = VK_TRUE,
     };
-    vk_check(vkCreateSwapchainKHR(g_ctx.device, &swapchain_ci, nullptr, &g_ctx.swapchain));
+    vkCheck(vkCreateSwapchainKHR(gCtx.device, &swapchainCi, nullptr, &gCtx.swapchain));
 
-    g_ctx.swapchain_format = surface_format.format;
-    g_ctx.swapchain_extent = extent;
-    g_ctx.rendering_color_format = surface_format.format;
+    gCtx.swapchainFormat = surfaceFormat.format;
+    gCtx.swapchainExtent = extent;
+    gCtx.renderingColorFormat = surfaceFormat.format;
 
-    u32 actual_count = 0;
-    vk_check(vkGetSwapchainImagesKHR(g_ctx.device, g_ctx.swapchain, &actual_count, nullptr));
-    g_ctx.swapchain_images.resize(actual_count);
-    vk_check(vkGetSwapchainImagesKHR(g_ctx.device, g_ctx.swapchain, &actual_count, g_ctx.swapchain_images.data()));
+    u32 actualCount = 0;
+    vkCheck(vkGetSwapchainImagesKHR(gCtx.device, gCtx.swapchain, &actualCount, nullptr));
+    gCtx.swapchainImages.resize(actualCount);
+    vkCheck(vkGetSwapchainImagesKHR(gCtx.device, gCtx.swapchain, &actualCount, gCtx.swapchainImages.data()));
 
-    g_ctx.swapchain_views.resize(actual_count);
-    for(u32 i = 0; i != actual_count; ++i) {
-        const VkImageViewCreateInfo view_ci{
+    gCtx.swapchainViews.resize(actualCount);
+    for(u32 i = 0; i != actualCount; ++i) {
+        const VkImageViewCreateInfo viewCi{
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image = g_ctx.swapchain_images[i],
+            .image = gCtx.swapchainImages[i],
             .viewType = VK_IMAGE_VIEW_TYPE_2D,
-            .format = g_ctx.swapchain_format,
+            .format = gCtx.swapchainFormat,
             .subresourceRange = {
                 .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
                 .levelCount = 1,
                 .layerCount = 1,
             },
         };
-        vk_check(vkCreateImageView(g_ctx.device, &view_ci, nullptr, &g_ctx.swapchain_views[i]));
+        vkCheck(vkCreateImageView(gCtx.device, &viewCi, nullptr, &gCtx.swapchainViews[i]));
     }
 
-    g_ctx.swapchain_render_semaphores.resize(actual_count);
-    const VkSemaphoreCreateInfo sem_ci{
+    gCtx.swapchainRenderSemaphores.resize(actualCount);
+    const VkSemaphoreCreateInfo semCi{
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
     };
-    for(u32 i = 0; i != actual_count; ++i) {
-        vk_check(vkCreateSemaphore(g_ctx.device, &sem_ci, nullptr, &g_ctx.swapchain_render_semaphores[i]));
+    for(u32 i = 0; i != actualCount; ++i) {
+        vkCheck(vkCreateSemaphore(gCtx.device, &semCi, nullptr, &gCtx.swapchainRenderSemaphores[i]));
     }
 }
 
-void wait_for_gpu_idle() {
-    if(g_ctx.device) {
-        vkDeviceWaitIdle(g_ctx.device);
+void waitForGpuIdle() {
+    if(gCtx.device) {
+        vkDeviceWaitIdle(gCtx.device);
     }
 }
 
-static void recreate_swapchain() {
+static void recreateSwapchain() {
     int width = 0;
     int height = 0;
-    glfwGetFramebufferSize(g_ctx.window, &width, &height);
+    glfwGetFramebufferSize(gCtx.window, &width, &height);
     if(width == 0 || height == 0) {
         return;
     }
 
-    wait_for_gpu_idle();
-    destroy_swapchain();
-    create_swapchain();
+    waitForGpuIdle();
+    destroySwapchain();
+    createSwapchain();
 }
 
-static void create_frames() {
-    for(InFlightFrame& frame : g_ctx.frames) {
-        const VkCommandPoolCreateInfo pool_ci{
+static void createFrames() {
+    for(InFlightFrame& frame : gCtx.frames) {
+        const VkCommandPoolCreateInfo poolCi{
             .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
             .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-            .queueFamilyIndex = g_ctx.graphics_queue_family,
+            .queueFamilyIndex = gCtx.graphicsQueueFamily,
         };
-        vk_check(vkCreateCommandPool(g_ctx.device, &pool_ci, nullptr, &frame.command_pool));
+        vkCheck(vkCreateCommandPool(gCtx.device, &poolCi, nullptr, &frame.commandPool));
 
-        const VkCommandBufferAllocateInfo alloc_ci{
+        const VkCommandBufferAllocateInfo allocCi{
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-            .commandPool = frame.command_pool,
+            .commandPool = frame.commandPool,
             .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
             .commandBufferCount = 1,
         };
-        vk_check(vkAllocateCommandBuffers(g_ctx.device, &alloc_ci, &frame.command_buffer));
+        vkCheck(vkAllocateCommandBuffers(gCtx.device, &allocCi, &frame.commandBuffer));
 
-        const VkFenceCreateInfo fence_ci{
+        const VkFenceCreateInfo fenceCi{
             .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
             .flags = VK_FENCE_CREATE_SIGNALED_BIT,
         };
-        vk_check(vkCreateFence(g_ctx.device, &fence_ci, nullptr, &frame.submitted));
+        vkCheck(vkCreateFence(gCtx.device, &fenceCi, nullptr, &frame.submitted));
 
-        const VkSemaphoreCreateInfo sem_ci{
+        const VkSemaphoreCreateInfo semCi{
             .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
         };
-        vk_check(vkCreateSemaphore(g_ctx.device, &sem_ci, nullptr, &frame.acquire));
+        vkCheck(vkCreateSemaphore(gCtx.device, &semCi, nullptr, &frame.acquire));
     }
 }
 
-static void create_timestamp_pools() {
-    u32 family_count = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(g_ctx.physical_device, &family_count, nullptr);
-    std::vector<VkQueueFamilyProperties> families(family_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(g_ctx.physical_device, &family_count, families.data());
-    g_ctx.timestamp_valid_bits = families[g_ctx.graphics_queue_family].timestampValidBits;
+static void createTimestampPools() {
+    u32 familyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(gCtx.physicalDevice, &familyCount, nullptr);
+    std::vector<VkQueueFamilyProperties> families(familyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(gCtx.physicalDevice, &familyCount, families.data());
+    gCtx.timestampValidBits = families[gCtx.graphicsQueueFamily].timestampValidBits;
 
-    if(!g_ctx.timestamp_valid_bits) {
+    if(!gCtx.timestampValidBits) {
         return;
     }
 
-    for(u32 i = 0; i != frames_in_flight; ++i) {
-        const VkQueryPoolCreateInfo pool_ci{
+    for(u32 i = 0; i != framesInFlight; ++i) {
+        const VkQueryPoolCreateInfo poolCi{
             .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
             .queryType = VK_QUERY_TYPE_TIMESTAMP,
-            .queryCount = timestamp_queries_per_frame,
+            .queryCount = timestampQueriesPerFrame,
         };
-        vk_check(vkCreateQueryPool(g_ctx.device, &pool_ci, nullptr, &g_ctx.timestamp_pools[i]));
+        vkCheck(vkCreateQueryPool(gCtx.device, &poolCi, nullptr, &gCtx.timestampPools[i]));
     }
 }
 
-static void destroy_timestamp_pools() {
-    for(u32 i = 0; i != frames_in_flight; ++i) {
-        if(g_ctx.timestamp_pools[i]) {
-            vkDestroyQueryPool(g_ctx.device, g_ctx.timestamp_pools[i], nullptr);
-            g_ctx.timestamp_pools[i] = VK_NULL_HANDLE;
+static void destroyTimestampPools() {
+    for(u32 i = 0; i != framesInFlight; ++i) {
+        if(gCtx.timestampPools[i]) {
+            vkDestroyQueryPool(gCtx.device, gCtx.timestampPools[i], nullptr);
+            gCtx.timestampPools[i] = VK_NULL_HANDLE;
         }
     }
 }
 
-static void create_pipeline_layout() {
-    const VkDescriptorSetLayoutBinding frame_bindings[] = {
-        {frame_ubo_binding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr},
-        {frame_lights_binding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr},
-        {frame_env_binding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
-        {frame_brdf_binding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
+static void createPipelineLayout() {
+    const VkDescriptorSetLayoutBinding frameBindings[] = {
+        {frameUboBinding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr},
+        {frameLightsBinding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr},
+        {frameEnvBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
+        {frameBrdfBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
     };
-    const VkDescriptorSetLayoutCreateInfo frame_set_ci{
+    const VkDescriptorSetLayoutCreateInfo frameSetCi{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = frame_binding_count,
-        .pBindings = frame_bindings,
+        .bindingCount = frameBindingCount,
+        .pBindings = frameBindings,
     };
-    vk_check(vkCreateDescriptorSetLayout(g_ctx.device, &frame_set_ci, nullptr, &g_ctx.frame_set_layout));
+    vkCheck(vkCreateDescriptorSetLayout(gCtx.device, &frameSetCi, nullptr, &gCtx.frameSetLayout));
 
-    const VkDescriptorSetLayoutBinding pass_bindings[] = {
+    const VkDescriptorSetLayoutBinding passBindings[] = {
         {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
         {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
         {2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
         {3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr},
-        {pass_storage_binding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_ALL, nullptr},
+        {passStorageBinding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_ALL, nullptr},
     };
-    const VkDescriptorSetLayoutCreateInfo pass_set_ci{
+    const VkDescriptorSetLayoutCreateInfo passSetCi{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
-        .bindingCount = pass_binding_count,
-        .pBindings = pass_bindings,
+        .bindingCount = passBindingCount,
+        .pBindings = passBindings,
     };
-    vk_check(vkCreateDescriptorSetLayout(g_ctx.device, &pass_set_ci, nullptr, &g_ctx.pass_set_layout));
+    vkCheck(vkCreateDescriptorSetLayout(gCtx.device, &passSetCi, nullptr, &gCtx.passSetLayout));
 
-    const VkDescriptorSetLayout set_layouts[] = {
-        g_ctx.frame_set_layout,
-        g_ctx.pass_set_layout,
+    const VkDescriptorSetLayout setLayouts[] = {
+        gCtx.frameSetLayout,
+        gCtx.passSetLayout,
     };
     const VkPushConstantRange push{
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
         .offset = 0,
         .size = sizeof(PushConstants),
     };
-    const VkPipelineLayoutCreateInfo layout_ci{
+    const VkPipelineLayoutCreateInfo layoutCi{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 2,
-        .pSetLayouts = set_layouts,
+        .pSetLayouts = setLayouts,
         .pushConstantRangeCount = 1,
         .pPushConstantRanges = &push,
     };
-    vk_check(vkCreatePipelineLayout(g_ctx.device, &layout_ci, nullptr, &g_ctx.pipeline_layout));
+    vkCheck(vkCreatePipelineLayout(gCtx.device, &layoutCi, nullptr, &gCtx.pipelineLayout));
 }
 
-static void create_samplers() {
+static void createSamplers() {
     VkPhysicalDeviceProperties props{};
-    vkGetPhysicalDeviceProperties(g_ctx.physical_device, &props);
+    vkGetPhysicalDeviceProperties(gCtx.physicalDevice, &props);
 
-    const auto make_sampler = [&](VkSamplerAddressMode address_mode) {
+    const auto makeSampler = [&](VkSamplerAddressMode addressMode) {
         const VkSamplerCreateInfo ci{
             .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
             .magFilter = VK_FILTER_LINEAR,
             .minFilter = VK_FILTER_LINEAR,
             .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-            .addressModeU = address_mode,
-            .addressModeV = address_mode,
-            .addressModeW = address_mode,
+            .addressModeU = addressMode,
+            .addressModeV = addressMode,
+            .addressModeW = addressMode,
             .mipLodBias = 0.0f,
             .anisotropyEnable = VK_TRUE,
             .maxAnisotropy = props.limits.maxSamplerAnisotropy,
@@ -429,16 +429,16 @@ static void create_samplers() {
             .maxLod = VK_LOD_CLAMP_NONE,
         };
         VkSampler sampler = VK_NULL_HANDLE;
-        vk_check(vkCreateSampler(g_ctx.device, &ci, nullptr, &sampler));
+        vkCheck(vkCreateSampler(gCtx.device, &ci, nullptr, &sampler));
         return sampler;
     };
 
-    g_ctx.sampler_repeat = make_sampler(VK_SAMPLER_ADDRESS_MODE_REPEAT);
-    g_ctx.sampler_clamp = make_sampler(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
+    gCtx.samplerRepeat = makeSampler(VK_SAMPLER_ADDRESS_MODE_REPEAT);
+    gCtx.samplerClamp = makeSampler(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
 }
 
-static void create_fallback_sampled_texture() {
-    const VkImageCreateInfo image_ci{
+static void createFallbackSampledTexture() {
+    const VkImageCreateInfo imageCi{
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = VK_IMAGE_TYPE_2D,
         .format = VK_FORMAT_R8G8B8A8_UNORM,
@@ -451,14 +451,14 @@ static void create_fallback_sampled_texture() {
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
-    const VmaAllocationCreateInfo alloc_ci{
+    const VmaAllocationCreateInfo allocCi{
         .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
     };
-    vk_check(vmaCreateImage(g_ctx.allocator, &image_ci, &alloc_ci, &g_ctx.fallback_sampled_image, &g_ctx.fallback_sampled_allocation, nullptr));
+    vkCheck(vmaCreateImage(gCtx.allocator, &imageCi, &allocCi, &gCtx.fallbackSampledImage, &gCtx.fallbackSampledAllocation, nullptr));
 
-    const VkImageViewCreateInfo view_ci{
+    const VkImageViewCreateInfo viewCi{
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = g_ctx.fallback_sampled_image,
+        .image = gCtx.fallbackSampledImage,
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
         .format = VK_FORMAT_R8G8B8A8_UNORM,
         .subresourceRange = {
@@ -467,32 +467,32 @@ static void create_fallback_sampled_texture() {
             .layerCount = 1,
         },
     };
-    vk_check(vkCreateImageView(g_ctx.device, &view_ci, nullptr, &g_ctx.fallback_sampled_view));
+    vkCheck(vkCreateImageView(gCtx.device, &viewCi, nullptr, &gCtx.fallbackSampledView));
 
     const u8 black[4] = {0, 0, 0, 255};
 
-    VkBuffer staging_buffer = VK_NULL_HANDLE;
-    VmaAllocation staging_allocation = nullptr;
+    VkBuffer stagingBuffer = VK_NULL_HANDLE;
+    VmaAllocation stagingAllocation = nullptr;
     {
-        const VkBufferCreateInfo buffer_ci{
+        const VkBufferCreateInfo bufferCi{
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .size = sizeof(black),
             .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
             .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         };
-        const VmaAllocationCreateInfo staging_alloc{
+        const VmaAllocationCreateInfo stagingAlloc{
             .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
             .usage = VMA_MEMORY_USAGE_AUTO,
         };
         VmaAllocationInfo info{};
-        vk_check(vmaCreateBuffer(g_ctx.allocator, &buffer_ci, &staging_alloc, &staging_buffer, &staging_allocation, &info));
+        vkCheck(vmaCreateBuffer(gCtx.allocator, &bufferCi, &stagingAlloc, &stagingBuffer, &stagingAllocation, &info));
         std::memcpy(info.pMappedData, black, sizeof(black));
     }
 
-    immediate_submit([&](VkCommandBuffer cmd) {
-        image_barrier(
+    immediateSubmit([&](VkCommandBuffer cmd) {
+        imageBarrier(
             cmd,
-            g_ctx.fallback_sampled_image,
+            gCtx.fallbackSampledImage,
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
@@ -515,11 +515,11 @@ static void create_fallback_sampled_texture() {
             .imageOffset = {0, 0, 0},
             .imageExtent = {1, 1, 1},
         };
-        vkCmdCopyBufferToImage(cmd, staging_buffer, g_ctx.fallback_sampled_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+        vkCmdCopyBufferToImage(cmd, stagingBuffer, gCtx.fallbackSampledImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
 
-        image_barrier(
+        imageBarrier(
             cmd,
-            g_ctx.fallback_sampled_image,
+            gCtx.fallbackSampledImage,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             VK_PIPELINE_STAGE_2_TRANSFER_BIT,
@@ -530,94 +530,94 @@ static void create_fallback_sampled_texture() {
         );
     });
 
-    vmaDestroyBuffer(g_ctx.allocator, staging_buffer, staging_allocation);
+    vmaDestroyBuffer(gCtx.allocator, stagingBuffer, stagingAllocation);
 }
 
-static void create_descriptor_pools() {
-    const VkDescriptorPoolSize frame_pool_sizes[] = {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, frames_in_flight + 1},
-        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, frames_in_flight + 1},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, (frames_in_flight + 1) * 2},
+static void createDescriptorPools() {
+    const VkDescriptorPoolSize framePoolSizes[] = {
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, framesInFlight + 1},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, framesInFlight + 1},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, (framesInFlight + 1) * 2},
     };
-    const VkDescriptorPoolCreateInfo frame_pool_ci{
+    const VkDescriptorPoolCreateInfo framePoolCi{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .maxSets = frames_in_flight + 1,
-        .poolSizeCount = u32(std::size(frame_pool_sizes)),
-        .pPoolSizes = frame_pool_sizes,
+        .maxSets = framesInFlight + 1,
+        .poolSizeCount = u32(std::size(framePoolSizes)),
+        .pPoolSizes = framePoolSizes,
     };
-    vk_check(vkCreateDescriptorPool(g_ctx.device, &frame_pool_ci, nullptr, &g_ctx.frame_descriptor_pool));
+    vkCheck(vkCreateDescriptorPool(gCtx.device, &framePoolCi, nullptr, &gCtx.frameDescriptorPool));
 
-    VkDescriptorSetLayout frame_layouts[frames_in_flight + 1];
-    for(u32 i = 0; i != frames_in_flight + 1; ++i) {
-        frame_layouts[i] = g_ctx.frame_set_layout;
+    VkDescriptorSetLayout frameLayouts[framesInFlight + 1];
+    for(u32 i = 0; i != framesInFlight + 1; ++i) {
+        frameLayouts[i] = gCtx.frameSetLayout;
     }
-    const VkDescriptorSetAllocateInfo frame_alloc{
+    const VkDescriptorSetAllocateInfo frameAlloc{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .descriptorPool = g_ctx.frame_descriptor_pool,
-        .descriptorSetCount = frames_in_flight + 1,
-        .pSetLayouts = frame_layouts,
+        .descriptorPool = gCtx.frameDescriptorPool,
+        .descriptorSetCount = framesInFlight + 1,
+        .pSetLayouts = frameLayouts,
     };
-    VkDescriptorSet frame_sets[frames_in_flight + 1] = {};
-    vk_check(vkAllocateDescriptorSets(g_ctx.device, &frame_alloc, frame_sets));
-    for(u32 i = 0; i != frames_in_flight; ++i) {
-        g_ctx.frames[i].frame_descriptor_set = frame_sets[i];
+    VkDescriptorSet frameSets[framesInFlight + 1] = {};
+    vkCheck(vkAllocateDescriptorSets(gCtx.device, &frameAlloc, frameSets));
+    for(u32 i = 0; i != framesInFlight; ++i) {
+        gCtx.frames[i].frameDescriptorSet = frameSets[i];
     }
 }
 
-static VkSampler sampler_for_texture(const Texture* texture) {
+static VkSampler samplerForTexture(const Texture* texture) {
     if(!texture) {
-        return g_ctx.sampler_repeat;
+        return gCtx.samplerRepeat;
     }
-    return texture->wrap_mode() == WrapMode::Clamp ? g_ctx.sampler_clamp : g_ctx.sampler_repeat;
+    return texture->wrapMode() == WrapMode::Clamp ? gCtx.samplerClamp : gCtx.samplerRepeat;
 }
 
 // If the texture was never transitioned, report SHADER_READ_ONLY so the descriptor write stays valid.
-static VkImageLayout sampled_layout_for_texture(const Texture* texture) {
-    if(!texture || texture->vk_layout() == VK_IMAGE_LAYOUT_UNDEFINED) {
+static VkImageLayout sampledLayoutForTexture(const Texture* texture) {
+    if(!texture || texture->vkLayout() == VK_IMAGE_LAYOUT_UNDEFINED) {
         return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
-    return texture->vk_layout();
+    return texture->vkLayout();
 }
 
 // PBR fallbacks when a texture slot is unbound (white albedo/emissive, flat normal, dielectric-rough).
-static const Texture* default_texture_for_slot(u32 slot) {
+static const Texture* defaultTextureForSlot(u32 slot) {
     switch(slot) {
         case 0:
         case 3:
-            return default_white_texture().get();
+            return defaultWhiteTexture().get();
         case 1:
-            return default_normal_texture().get();
+            return defaultNormalTexture().get();
         case 2:
-            return default_metal_rough_texture().get();
+            return defaultMetalRoughTexture().get();
         default:
-            return default_black_texture().get();
+            return defaultBlackTexture().get();
     }
 }
 
-static VkDescriptorImageInfo sampled_image_info(const Texture* texture, u32 default_slot) {
+static VkDescriptorImageInfo sampledImageInfo(const Texture* texture, u32 defaultSlot) {
     if(!texture) {
-        texture = default_texture_for_slot(default_slot);
+        texture = defaultTextureForSlot(defaultSlot);
     }
 
-    VkImageView view = g_ctx.fallback_sampled_view;
-    if(texture && texture->vk_view()) {
-        view = texture->vk_view();
+    VkImageView view = gCtx.fallbackSampledView;
+    if(texture && texture->vkView()) {
+        view = texture->vkView();
     }
 
     return {
-        .sampler = sampler_for_texture(texture),
+        .sampler = samplerForTexture(texture),
         .imageView = view,
-        .imageLayout = sampled_layout_for_texture(texture),
+        .imageLayout = sampledLayoutForTexture(texture),
     };
 }
 
 // Writes FrameResources into the persistent set for this slot and binds set 0.
-void bind_frame(const FrameResources& frame) {
-    if(!g_ctx.pipeline_layout || !g_ctx.frame_set_layout) {
+void bindFrame(const FrameResources& frame) {
+    if(!gCtx.pipelineLayout || !gCtx.frameSetLayout) {
         return;
     }
 
-    const VkDescriptorSet set = g_ctx.frames[g_ctx.frame_index].frame_descriptor_set;
+    const VkDescriptorSet set = gCtx.frames[gCtx.frameIndex].frameDescriptorSet;
     if(!set) {
         return;
     }
@@ -625,65 +625,65 @@ void bind_frame(const FrameResources& frame) {
     ALWAYS_ASSERT(frame.ubo, "frame UBO is missing");
     ALWAYS_ASSERT(frame.lights, "frame lights are missing");
 
-    const VkDescriptorBufferInfo ubo_info{
+    const VkDescriptorBufferInfo uboInfo{
         .buffer = frame.ubo,
         .offset = 0,
-        .range = frame.ubo_size,
+        .range = frame.uboSize,
     };
-    const VkDescriptorBufferInfo lights_info{
+    const VkDescriptorBufferInfo lightsInfo{
         .buffer = frame.lights,
         .offset = 0,
-        .range = frame.lights_size,
+        .range = frame.lightsSize,
     };
 
-    const VkDescriptorImageInfo env_info = sampled_image_info(frame.env, 4);
-    const VkDescriptorImageInfo brdf_info = sampled_image_info(frame.brdf, 5);
+    const VkDescriptorImageInfo envInfo = sampledImageInfo(frame.env, 4);
+    const VkDescriptorImageInfo brdfInfo = sampledImageInfo(frame.brdf, 5);
 
     const VkWriteDescriptorSet writes[] = {
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = set,
-            .dstBinding = frame_ubo_binding,
+            .dstBinding = frameUboBinding,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .pBufferInfo = &ubo_info,
+            .pBufferInfo = &uboInfo,
         },
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = set,
-            .dstBinding = frame_lights_binding,
+            .dstBinding = frameLightsBinding,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .pBufferInfo = &lights_info,
+            .pBufferInfo = &lightsInfo,
         },
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = set,
-            .dstBinding = frame_env_binding,
+            .dstBinding = frameEnvBinding,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo = &env_info,
+            .pImageInfo = &envInfo,
         },
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = set,
-            .dstBinding = frame_brdf_binding,
+            .dstBinding = frameBrdfBinding,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo = &brdf_info,
+            .pImageInfo = &brdfInfo,
         },
     };
-    vkUpdateDescriptorSets(g_ctx.device, u32(std::size(writes)), writes, 0, nullptr);
+    vkUpdateDescriptorSets(gCtx.device, u32(std::size(writes)), writes, 0, nullptr);
 
-    if(!vk_is_recording()) {
+    if(!vkIsRecording()) {
         return;
     }
 
     vkCmdBindDescriptorSets(
-        vk_command_buffer(),
+        vkCommandBuffer(),
         VK_PIPELINE_BIND_POINT_GRAPHICS,
-        g_ctx.pipeline_layout,
-        frame_set,
+        gCtx.pipelineLayout,
+        frameSet,
         1,
         &set,
         0,
@@ -693,119 +693,119 @@ void bind_frame(const FrameResources& frame) {
 
 // Push PassResources into set 1 for the next draw/dispatch.
 // Alternative approach: one persistent set per Material + sort draws by material.
-void push_pass_descriptors(const PassResources& pass, bool compute) {
-    if(!vk_is_recording() || !g_ctx.pipeline_layout || !g_ctx.pass_set_layout) {
+void pushPassDescriptors(const PassResources& pass, bool compute) {
+    if(!vkIsRecording() || !gCtx.pipelineLayout || !gCtx.passSetLayout) {
         return;
     }
 
-    VkWriteDescriptorSet writes[pass_binding_count] = {};
-    u32 write_count = 0;
+    VkWriteDescriptorSet writes[passBindingCount] = {};
+    u32 writeCount = 0;
 
-    VkDescriptorImageInfo sampled_infos[pass_texture_slot_count] = {};
-    for(u32 slot = 0; slot != pass_texture_slot_count; ++slot) {
-        sampled_infos[slot] = sampled_image_info(pass.textures[slot], slot);
-        writes[write_count++] = {
+    VkDescriptorImageInfo sampledInfos[passTextureSlotCount] = {};
+    for(u32 slot = 0; slot != passTextureSlotCount; ++slot) {
+        sampledInfos[slot] = sampledImageInfo(pass.textures[slot], slot);
+        writes[writeCount++] = {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstBinding = slot,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo = &sampled_infos[slot],
+            .pImageInfo = &sampledInfos[slot],
         };
     }
 
-    VkDescriptorImageInfo storage_info{};
-    if(pass.storage_image && pass.storage_image->vk_storage_view()) {
-        storage_info = {
-            .imageView = pass.storage_image->vk_storage_view(),
+    VkDescriptorImageInfo storageInfo{};
+    if(pass.storageImage && pass.storageImage->vkStorageView()) {
+        storageInfo = {
+            .imageView = pass.storageImage->vkStorageView(),
             .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
         };
     } else {
-        storage_info = {
-            .imageView = g_ctx.fallback_sampled_view,
+        storageInfo = {
+            .imageView = gCtx.fallbackSampledView,
             .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
         };
     }
-    writes[write_count++] = {
+    writes[writeCount++] = {
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstBinding = pass_storage_binding,
+        .dstBinding = passStorageBinding,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-        .pImageInfo = &storage_info,
+        .pImageInfo = &storageInfo,
     };
 
     vkCmdPushDescriptorSetKHR(
-        vk_command_buffer(),
+        vkCommandBuffer(),
         compute ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS,
-        g_ctx.pipeline_layout,
-        pass_set,
-        write_count,
+        gCtx.pipelineLayout,
+        passSet,
+        writeCount,
         writes
     );
 }
 
-static void create_immediate_pool() {
-    const VkCommandPoolCreateInfo pool_ci{
+static void createImmediatePool() {
+    const VkCommandPoolCreateInfo poolCi{
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-        .queueFamilyIndex = g_ctx.graphics_queue_family,
+        .queueFamilyIndex = gCtx.graphicsQueueFamily,
     };
-    vk_check(vkCreateCommandPool(g_ctx.device, &pool_ci, nullptr, &g_ctx.immediate_pool));
+    vkCheck(vkCreateCommandPool(gCtx.device, &poolCi, nullptr, &gCtx.immediatePool));
 }
 
-static u32 pending_deletion_slot() {
+static u32 pendingDeletionSlot() {
     // During a frame, objects may still be referenced by this slot's command buffer.
     // Between frames, the last submitted slot is the one that may still be on the GPU.
-    if(g_ctx.frame_active) {
-        return g_ctx.frame_index;
+    if(gCtx.frameActive) {
+        return gCtx.frameIndex;
     }
-    return (g_ctx.frame_index + frames_in_flight - 1) % frames_in_flight;
+    return (gCtx.frameIndex + framesInFlight - 1) % framesInFlight;
 }
 
-static void destroy_entry(const DeletionEntry& entry) {
+static void destroyEntry(const DeletionEntry& entry) {
     switch(entry.type) {
         case DeletionEntry::Type::Buffer:
-            vmaDestroyBuffer(g_ctx.allocator, entry.buffer, entry.allocation);
+            vmaDestroyBuffer(gCtx.allocator, entry.buffer, entry.allocation);
             break;
         case DeletionEntry::Type::Image:
-            vmaDestroyImage(g_ctx.allocator, entry.image, entry.allocation);
+            vmaDestroyImage(gCtx.allocator, entry.image, entry.allocation);
             break;
         case DeletionEntry::Type::ImageView:
-            vkDestroyImageView(g_ctx.device, entry.image_view, nullptr);
+            vkDestroyImageView(gCtx.device, entry.imageView, nullptr);
             break;
         case DeletionEntry::Type::Sampler:
-            vkDestroySampler(g_ctx.device, entry.sampler, nullptr);
+            vkDestroySampler(gCtx.device, entry.sampler, nullptr);
             break;
         case DeletionEntry::Type::Pipeline:
-            vkDestroyPipeline(g_ctx.device, entry.pipeline, nullptr);
+            vkDestroyPipeline(gCtx.device, entry.pipeline, nullptr);
             break;
         case DeletionEntry::Type::ShaderModule:
-            vkDestroyShaderModule(g_ctx.device, entry.shader_module, nullptr);
+            vkDestroyShaderModule(gCtx.device, entry.shaderModule, nullptr);
             break;
     }
 }
 
-void flush_frame_deletions(u32 frame_slot) {
-    std::vector<DeletionEntry>& queue = g_ctx.deletions[frame_slot];
+void flushFrameDeletions(u32 frameSlot) {
+    std::vector<DeletionEntry>& queue = gCtx.deletions[frameSlot];
     for(auto it = queue.rbegin(); it != queue.rend(); ++it) {
-        destroy_entry(*it);
+        destroyEntry(*it);
     }
     queue.clear();
 }
 
-void flush_all_deletions() {
-    for(u32 i = 0; i != frames_in_flight; ++i) {
-        flush_frame_deletions(i);
+void flushAllDeletions() {
+    for(u32 i = 0; i != framesInFlight; ++i) {
+        flushFrameDeletions(i);
     }
 }
 
-static void enqueue_deletion(DeletionEntry entry) {
-    if(!g_ctx.device) {
+static void enqueueDeletion(DeletionEntry entry) {
+    if(!gCtx.device) {
         return;
     }
-    g_ctx.deletions[pending_deletion_slot()].push_back(entry);
+    gCtx.deletions[pendingDeletionSlot()].push_back(entry);
 }
 
-void defer_destroy(VkBuffer buffer, VmaAllocation allocation) {
+void deferDestroy(VkBuffer buffer, VmaAllocation allocation) {
     if(!buffer) {
         return;
     }
@@ -813,10 +813,10 @@ void defer_destroy(VkBuffer buffer, VmaAllocation allocation) {
     entry.type = DeletionEntry::Type::Buffer;
     entry.allocation = allocation;
     entry.buffer = buffer;
-    enqueue_deletion(entry);
+    enqueueDeletion(entry);
 }
 
-void defer_destroy(VkImage image, VmaAllocation allocation) {
+void deferDestroy(VkImage image, VmaAllocation allocation) {
     if(!image) {
         return;
     }
@@ -824,117 +824,117 @@ void defer_destroy(VkImage image, VmaAllocation allocation) {
     entry.type = DeletionEntry::Type::Image;
     entry.allocation = allocation;
     entry.image = image;
-    enqueue_deletion(entry);
+    enqueueDeletion(entry);
 }
 
-void defer_destroy(VkImageView view) {
+void deferDestroy(VkImageView view) {
     if(!view) {
         return;
     }
     DeletionEntry entry{};
     entry.type = DeletionEntry::Type::ImageView;
-    entry.image_view = view;
-    enqueue_deletion(entry);
+    entry.imageView = view;
+    enqueueDeletion(entry);
 }
 
-void defer_destroy(VkSampler sampler) {
+void deferDestroy(VkSampler sampler) {
     if(!sampler) {
         return;
     }
     DeletionEntry entry{};
     entry.type = DeletionEntry::Type::Sampler;
     entry.sampler = sampler;
-    enqueue_deletion(entry);
+    enqueueDeletion(entry);
 }
 
-void defer_destroy(VkPipeline pipeline) {
+void deferDestroy(VkPipeline pipeline) {
     if(!pipeline) {
         return;
     }
     DeletionEntry entry{};
     entry.type = DeletionEntry::Type::Pipeline;
     entry.pipeline = pipeline;
-    enqueue_deletion(entry);
+    enqueueDeletion(entry);
 }
 
-void defer_destroy(VkShaderModule module) {
+void deferDestroy(VkShaderModule module) {
     if(!module) {
         return;
     }
     DeletionEntry entry{};
     entry.type = DeletionEntry::Type::ShaderModule;
-    entry.shader_module = module;
-    enqueue_deletion(entry);
+    entry.shaderModule = module;
+    enqueueDeletion(entry);
 }
 
-void immediate_submit(std::function<void(VkCommandBuffer)>&& record) {
-    ALWAYS_ASSERT(g_ctx.immediate_pool && g_ctx.graphics_queue, "immediate_submit called before vk_init");
+void immediateSubmit(std::function<void(VkCommandBuffer)>&& record) {
+    ALWAYS_ASSERT(gCtx.immediatePool && gCtx.graphicsQueue, "immediateSubmit called before vkInit");
 
-    const VkCommandBufferAllocateInfo alloc_ci{
+    const VkCommandBufferAllocateInfo allocCi{
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = g_ctx.immediate_pool,
+        .commandPool = gCtx.immediatePool,
         .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
         .commandBufferCount = 1,
     };
     VkCommandBuffer cmd = VK_NULL_HANDLE;
-    vk_check(vkAllocateCommandBuffers(g_ctx.device, &alloc_ci, &cmd));
+    vkCheck(vkAllocateCommandBuffers(gCtx.device, &allocCi, &cmd));
 
-    const VkCommandBufferBeginInfo begin_ci{
+    const VkCommandBufferBeginInfo beginCi{
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
     };
-    vk_check(vkBeginCommandBuffer(cmd, &begin_ci));
+    vkCheck(vkBeginCommandBuffer(cmd, &beginCi));
 
-    // Install as the current command buffer so bind_graphics / dispatch
+    // Install as the current command buffer so bindGraphics / dispatch
     // (the GL-style API) record here instead of into a frame that is not active.
-    const VkCommandBuffer prev_immediate = g_ctx.immediate_cmd;
-    g_ctx.immediate_cmd = cmd;
+    const VkCommandBuffer prevImmediate = gCtx.immediateCmd;
+    gCtx.immediateCmd = cmd;
     record(cmd);
-    g_ctx.immediate_cmd = prev_immediate;
+    gCtx.immediateCmd = prevImmediate;
 
-    vk_check(vkEndCommandBuffer(cmd));
+    vkCheck(vkEndCommandBuffer(cmd));
 
-    const VkFenceCreateInfo fence_ci{
+    const VkFenceCreateInfo fenceCi{
         .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
     };
     VkFence fence = VK_NULL_HANDLE;
-    vk_check(vkCreateFence(g_ctx.device, &fence_ci, nullptr, &fence));
+    vkCheck(vkCreateFence(gCtx.device, &fenceCi, nullptr, &fence));
 
-    const VkCommandBufferSubmitInfo cmd_info{
+    const VkCommandBufferSubmitInfo cmdInfo{
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
         .commandBuffer = cmd,
     };
     const VkSubmitInfo2 submit{
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
         .commandBufferInfoCount = 1,
-        .pCommandBufferInfos = &cmd_info,
+        .pCommandBufferInfos = &cmdInfo,
     };
-    vk_check(vkQueueSubmit2(g_ctx.graphics_queue, 1, &submit, fence));
-    vk_check(vkWaitForFences(g_ctx.device, 1, &fence, VK_TRUE, UINT64_MAX));
+    vkCheck(vkQueueSubmit2(gCtx.graphicsQueue, 1, &submit, fence));
+    vkCheck(vkWaitForFences(gCtx.device, 1, &fence, VK_TRUE, UINT64_MAX));
 
-    vkDestroyFence(g_ctx.device, fence, nullptr);
-    vkFreeCommandBuffers(g_ctx.device, g_ctx.immediate_pool, 1, &cmd);
+    vkDestroyFence(gCtx.device, fence, nullptr);
+    vkFreeCommandBuffers(gCtx.device, gCtx.immediatePool, 1, &cmd);
 }
 
-void image_barrier(
+void imageBarrier(
     VkCommandBuffer cmd,
     VkImage image,
-    VkImageLayout old_layout,
-    VkImageLayout new_layout,
-    VkPipelineStageFlags2 src_stage,
-    VkAccessFlags2 src_access,
-    VkPipelineStageFlags2 dst_stage,
-    VkAccessFlags2 dst_access,
+    VkImageLayout oldLayout,
+    VkImageLayout newLayout,
+    VkPipelineStageFlags2 srcStage,
+    VkAccessFlags2 srcAccess,
+    VkPipelineStageFlags2 dstStage,
+    VkAccessFlags2 dstAccess,
     VkImageAspectFlags aspect
 ) {
     const VkImageMemoryBarrier2 barrier{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = src_stage,
-        .srcAccessMask = src_access,
-        .dstStageMask = dst_stage,
-        .dstAccessMask = dst_access,
-        .oldLayout = old_layout,
-        .newLayout = new_layout,
+        .srcStageMask = srcStage,
+        .srcAccessMask = srcAccess,
+        .dstStageMask = dstStage,
+        .dstAccessMask = dstAccess,
+        .oldLayout = oldLayout,
+        .newLayout = newLayout,
         .image = image,
         .subresourceRange = {
             .aspectMask = aspect,
@@ -950,27 +950,27 @@ void image_barrier(
     vkCmdPipelineBarrier2(cmd, &dep);
 }
 
-void end_rendering_if_active() {
-    if(!g_ctx.rendering_active) {
+void endRenderingIfActive() {
+    if(!gCtx.renderingActive) {
         return;
     }
 
-    vkCmdEndRendering(vk_command_buffer());
-    g_ctx.rendering_active = false;
-    g_ctx.rendering_to_swapchain = false;
+    vkCmdEndRendering(vkCommandBuffer());
+    gCtx.renderingActive = false;
+    gCtx.renderingToSwapchain = false;
 
     // You cannot change an attachment's layout while it is being rendered to.
     // After EndRendering, the offscreen colors are just images: make them
     // sampleable so the next pass (tonemap, blit) can bind them as textures.
-    const VkCommandBuffer cmd = vk_command_buffer();
-    for(u32 i = 0; i != g_ctx.rendering_color_count; ++i) {
-        Texture* tex = g_ctx.rendering_colors[i];
-        if(!tex || tex->vk_layout() != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
+    const VkCommandBuffer cmd = vkCommandBuffer();
+    for(u32 i = 0; i != gCtx.renderingColorCount; ++i) {
+        Texture* tex = gCtx.renderingColors[i];
+        if(!tex || tex->vkLayout() != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
             continue;
         }
-        image_barrier(
+        imageBarrier(
             cmd,
-            tex->vk_image(),
+            tex->vkImage(),
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -978,19 +978,19 @@ void end_rendering_if_active() {
             VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
             VK_ACCESS_2_SHADER_SAMPLED_READ_BIT
         );
-        tex->set_vk_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        tex->setVkLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }
-    g_ctx.rendering_color_count = 0;
+    gCtx.renderingColorCount = 0;
 }
 
-static void transition_swapchain_to_present() {
-    if(g_ctx.swapchain_layout != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
+static void transitionSwapchainToPresent() {
+    if(gCtx.swapchainLayout != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
         return;
     }
 
-    image_barrier(
-        vk_command_buffer(),
-        g_ctx.swapchain_images[g_ctx.image_index],
+    imageBarrier(
+        vkCommandBuffer(),
+        gCtx.swapchainImages[gCtx.imageIndex],
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -999,232 +999,232 @@ static void transition_swapchain_to_present() {
         0,
         VK_IMAGE_ASPECT_COLOR_BIT
     );
-    g_ctx.swapchain_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    gCtx.swapchainLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 }
 
-void vk_init(GLFWwindow* window) {
-    ALWAYS_ASSERT(window, "init_graphics requires a GLFW window");
-    g_ctx.window = window;
+void vkInit(GLFWwindow* window) {
+    ALWAYS_ASSERT(window, "initGraphics requires a GLFW window");
+    gCtx.window = window;
 
-    vk_check(volkInitialize());
+    vkCheck(volkInitialize());
 
-    u32 glfw_ext_count = 0;
-    const char** glfw_exts = glfwGetRequiredInstanceExtensions(&glfw_ext_count);
-    ALWAYS_ASSERT(glfw_exts && glfw_ext_count, "GLFW was not built with Vulkan support");
+    u32 glfwExtCount = 0;
+    const char** glfwExts = glfwGetRequiredInstanceExtensions(&glfwExtCount);
+    ALWAYS_ASSERT(glfwExts && glfwExtCount, "GLFW was not built with Vulkan support");
 
-    std::vector<const char*> instance_exts(glfw_exts, glfw_exts + glfw_ext_count);
+    std::vector<const char*> instanceExts(glfwExts, glfwExts + glfwExtCount);
 
 #ifdef NEBULA_DEBUG
-    const bool use_validation = has_instance_layer("VK_LAYER_KHRONOS_validation");
-    if(!use_validation) {
+    const bool useValidation = hasInstanceLayer("VK_LAYER_KHRONOS_validation");
+    if(!useValidation) {
         std::cerr << "VK_LAYER_KHRONOS_validation not found; continuing without it" << std::endl;
     }
-    instance_exts.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-    const char* validation_layer = "VK_LAYER_KHRONOS_validation";
-    const VkDebugUtilsMessengerCreateInfoEXT debug_ci = debug_messenger_info();
+    instanceExts.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    const char* validationLayer = "VK_LAYER_KHRONOS_validation";
+    const VkDebugUtilsMessengerCreateInfoEXT debugCi = debugMessengerInfo();
 #endif
 
-    const VkApplicationInfo app_info{
+    const VkApplicationInfo appInfo{
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pApplicationName = "nebula",
         .apiVersion = VK_API_VERSION_1_3,
     };
 
-    const VkInstanceCreateInfo instance_ci{
+    const VkInstanceCreateInfo instanceCi{
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
 #ifdef NEBULA_DEBUG
-        .pNext = &debug_ci,
+        .pNext = &debugCi,
 #endif
-        .pApplicationInfo = &app_info,
+        .pApplicationInfo = &appInfo,
 #ifdef NEBULA_DEBUG
-        .enabledLayerCount = use_validation ? 1u : 0u,
-        .ppEnabledLayerNames = use_validation ? &validation_layer : nullptr,
+        .enabledLayerCount = useValidation ? 1u : 0u,
+        .ppEnabledLayerNames = useValidation ? &validationLayer : nullptr,
 #endif
-        .enabledExtensionCount = u32(instance_exts.size()),
-        .ppEnabledExtensionNames = instance_exts.data(),
+        .enabledExtensionCount = u32(instanceExts.size()),
+        .ppEnabledExtensionNames = instanceExts.data(),
     };
-    vk_check(vkCreateInstance(&instance_ci, nullptr, &g_ctx.instance));
-    volkLoadInstance(g_ctx.instance);
+    vkCheck(vkCreateInstance(&instanceCi, nullptr, &gCtx.instance));
+    volkLoadInstance(gCtx.instance);
 
 #ifdef NEBULA_DEBUG
-    vk_check(vkCreateDebugUtilsMessengerEXT(g_ctx.instance, &debug_ci, nullptr, &g_ctx.debug_messenger));
+    vkCheck(vkCreateDebugUtilsMessengerEXT(gCtx.instance, &debugCi, nullptr, &gCtx.debugMessenger));
 #endif
 
-    vk_check(glfwCreateWindowSurface(g_ctx.instance, window, nullptr, &g_ctx.surface));
+    vkCheck(glfwCreateWindowSurface(gCtx.instance, window, nullptr, &gCtx.surface));
 
-    u32 device_count = 0;
-    vk_check(vkEnumeratePhysicalDevices(g_ctx.instance, &device_count, nullptr));
-    ALWAYS_ASSERT(device_count, "No Vulkan-capable GPUs found");
-    std::vector<VkPhysicalDevice> devices(device_count);
-    vk_check(vkEnumeratePhysicalDevices(g_ctx.instance, &device_count, devices.data()));
+    u32 deviceCount = 0;
+    vkCheck(vkEnumeratePhysicalDevices(gCtx.instance, &deviceCount, nullptr));
+    ALWAYS_ASSERT(deviceCount, "No Vulkan-capable GPUs found");
+    std::vector<VkPhysicalDevice> devices(deviceCount);
+    vkCheck(vkEnumeratePhysicalDevices(gCtx.instance, &deviceCount, devices.data()));
 
-    int best_score = 0;
+    int bestScore = 0;
     for(VkPhysicalDevice physical : devices) {
         u32 family = 0;
-        const int score = rate_device(physical, g_ctx.surface, &family);
-        if(score > best_score) {
-            best_score = score;
-            g_ctx.physical_device = physical;
-            g_ctx.graphics_queue_family = family;
+        const int score = rateDevice(physical, gCtx.surface, &family);
+        if(score > bestScore) {
+            bestScore = score;
+            gCtx.physicalDevice = physical;
+            gCtx.graphicsQueueFamily = family;
         }
     }
-    ALWAYS_ASSERT(g_ctx.physical_device, "No suitable Vulkan 1.3 GPU with graphics+present and swapchain");
+    ALWAYS_ASSERT(gCtx.physicalDevice, "No suitable Vulkan 1.3 GPU with graphics+present and swapchain");
 
     VkPhysicalDeviceProperties2 props{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
     };
-    vkGetPhysicalDeviceProperties2(g_ctx.physical_device, &props);
-    g_ctx.device_name = props.properties.deviceName;
-    g_ctx.timestamp_period = props.properties.limits.timestampPeriod;
-    std::cout << "Vulkan 1.3 initialized on " << g_ctx.device_name << std::endl;
+    vkGetPhysicalDeviceProperties2(gCtx.physicalDevice, &props);
+    gCtx.deviceName = props.properties.deviceName;
+    gCtx.timestampPeriod = props.properties.limits.timestampPeriod;
+    std::cout << "Vulkan 1.3 initialized on " << gCtx.deviceName << std::endl;
 
-    const float queue_priority = 1.0f;
-    const VkDeviceQueueCreateInfo queue_ci{
+    const float queuePriority = 1.0f;
+    const VkDeviceQueueCreateInfo queueCi{
         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-        .queueFamilyIndex = g_ctx.graphics_queue_family,
+        .queueFamilyIndex = gCtx.graphicsQueueFamily,
         .queueCount = 1,
-        .pQueuePriorities = &queue_priority,
+        .pQueuePriorities = &queuePriority,
     };
 
-    const char* device_exts[] = {
+    const char* deviceExts[] = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
     };
 
-    VkPhysicalDeviceVulkan13Features vk13_features{
+    VkPhysicalDeviceVulkan13Features vk13Features{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
         .synchronization2 = VK_TRUE,
         .dynamicRendering = VK_TRUE,
     };
-    VkPhysicalDeviceVulkan12Features vk12_features{
+    VkPhysicalDeviceVulkan12Features vk12Features{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-        .pNext = &vk13_features,
+        .pNext = &vk13Features,
         .hostQueryReset = VK_TRUE,
     };
-    VkPhysicalDeviceVulkan11Features vk11_features{
+    VkPhysicalDeviceVulkan11Features vk11Features{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
-        .pNext = &vk12_features,
+        .pNext = &vk12Features,
         .shaderDrawParameters = VK_TRUE,
     };
-    const VkPhysicalDeviceFeatures vk10_features{
+    const VkPhysicalDeviceFeatures vk10Features{
         .samplerAnisotropy = VK_TRUE,
     };
 
-    const VkDeviceCreateInfo device_ci{
+    const VkDeviceCreateInfo deviceCi{
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .pNext = &vk11_features,
+        .pNext = &vk11Features,
         .queueCreateInfoCount = 1,
-        .pQueueCreateInfos = &queue_ci,
+        .pQueueCreateInfos = &queueCi,
         .enabledExtensionCount = 2,
-        .ppEnabledExtensionNames = device_exts,
-        .pEnabledFeatures = &vk10_features,
+        .ppEnabledExtensionNames = deviceExts,
+        .pEnabledFeatures = &vk10Features,
     };
-    vk_check(vkCreateDevice(g_ctx.physical_device, &device_ci, nullptr, &g_ctx.device));
-    vkGetDeviceQueue(g_ctx.device, g_ctx.graphics_queue_family, 0, &g_ctx.graphics_queue);
-    volkLoadDevice(g_ctx.device);
+    vkCheck(vkCreateDevice(gCtx.physicalDevice, &deviceCi, nullptr, &gCtx.device));
+    vkGetDeviceQueue(gCtx.device, gCtx.graphicsQueueFamily, 0, &gCtx.graphicsQueue);
+    volkLoadDevice(gCtx.device);
 
-    const VmaVulkanFunctions vma_functions{
+    const VmaVulkanFunctions vmaFunctions{
         .vkGetInstanceProcAddr = vkGetInstanceProcAddr,
         .vkGetDeviceProcAddr = vkGetDeviceProcAddr,
     };
-    VmaAllocatorCreateInfo allocator_ci{
-        .physicalDevice = g_ctx.physical_device,
-        .device = g_ctx.device,
-        .pVulkanFunctions = &vma_functions,
-        .instance = g_ctx.instance,
+    VmaAllocatorCreateInfo allocatorCi{
+        .physicalDevice = gCtx.physicalDevice,
+        .device = gCtx.device,
+        .pVulkanFunctions = &vmaFunctions,
+        .instance = gCtx.instance,
         .vulkanApiVersion = VK_API_VERSION_1_3,
     };
-    vk_check(vmaCreateAllocator(&allocator_ci, &g_ctx.allocator));
+    vkCheck(vmaCreateAllocator(&allocatorCi, &gCtx.allocator));
 
-    create_swapchain();
-    create_frames();
-    create_timestamp_pools();
-    create_immediate_pool();
-    create_pipeline_layout();
-    create_samplers();
-    create_descriptor_pools();
-    create_fallback_sampled_texture();
-    g_ctx.frame_index = 0;
+    createSwapchain();
+    createFrames();
+    createTimestampPools();
+    createImmediatePool();
+    createPipelineLayout();
+    createSamplers();
+    createDescriptorPools();
+    createFallbackSampledTexture();
+    gCtx.frameIndex = 0;
 }
 
-void begin_frame() {
-    ALWAYS_ASSERT(!g_ctx.frame_active, "begin_frame called twice without end_frame");
+void beginFrame() {
+    ALWAYS_ASSERT(!gCtx.frameActive, "beginFrame called twice without endFrame");
 
     int width = 0;
     int height = 0;
-    glfwGetFramebufferSize(g_ctx.window, &width, &height);
+    glfwGetFramebufferSize(gCtx.window, &width, &height);
     if(width == 0 || height == 0) {
         return;
     }
 
-    if(u32(width) != g_ctx.swapchain_extent.width || u32(height) != g_ctx.swapchain_extent.height) {
-        recreate_swapchain();
+    if(u32(width) != gCtx.swapchainExtent.width || u32(height) != gCtx.swapchainExtent.height) {
+        recreateSwapchain();
     }
 
-    InFlightFrame& frame = g_ctx.frames[g_ctx.frame_index];
-    vk_check(vkWaitForFences(g_ctx.device, 1, &frame.submitted, VK_TRUE, UINT64_MAX));
-    flush_frame_deletions(g_ctx.frame_index);
-    reset_timestamp_queries();
-    vk_check(vkResetFences(g_ctx.device, 1, &frame.submitted));
-    vk_check(vkResetCommandPool(g_ctx.device, frame.command_pool, 0));
+    InFlightFrame& frame = gCtx.frames[gCtx.frameIndex];
+    vkCheck(vkWaitForFences(gCtx.device, 1, &frame.submitted, VK_TRUE, UINT64_MAX));
+    flushFrameDeletions(gCtx.frameIndex);
+    resetTimestampQueries();
+    vkCheck(vkResetFences(gCtx.device, 1, &frame.submitted));
+    vkCheck(vkResetCommandPool(gCtx.device, frame.commandPool, 0));
 
     VkResult acquired = vkAcquireNextImageKHR(
-        g_ctx.device,
-        g_ctx.swapchain,
+        gCtx.device,
+        gCtx.swapchain,
         UINT64_MAX,
         frame.acquire,
         VK_NULL_HANDLE,
-        &g_ctx.image_index
+        &gCtx.imageIndex
     );
     if(acquired == VK_ERROR_OUT_OF_DATE_KHR) {
-        recreate_swapchain();
+        recreateSwapchain();
         acquired = vkAcquireNextImageKHR(
-            g_ctx.device,
-            g_ctx.swapchain,
+            gCtx.device,
+            gCtx.swapchain,
             UINT64_MAX,
             frame.acquire,
             VK_NULL_HANDLE,
-            &g_ctx.image_index
+            &gCtx.imageIndex
         );
     }
     ALWAYS_ASSERT(acquired == VK_SUCCESS || acquired == VK_SUBOPTIMAL_KHR, "vkAcquireNextImageKHR failed");
 
-    const VkCommandBufferBeginInfo begin_ci{
+    const VkCommandBufferBeginInfo beginCi{
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
     };
-    vk_check(vkBeginCommandBuffer(frame.command_buffer, &begin_ci));
+    vkCheck(vkBeginCommandBuffer(frame.commandBuffer, &beginCi));
 
-    g_ctx.frame_active = true;
-    g_ctx.rendering_active = false;
-    g_ctx.rendering_to_swapchain = false;
-    g_ctx.swapchain_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    gCtx.frameActive = true;
+    gCtx.renderingActive = false;
+    gCtx.renderingToSwapchain = false;
+    gCtx.swapchainLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 }
 
-void end_frame() {
-    if(!g_ctx.frame_active) {
+void endFrame() {
+    if(!gCtx.frameActive) {
         return;
     }
 
-    InFlightFrame& frame = g_ctx.frames[g_ctx.frame_index];
-    VkSemaphore& render_sem = g_ctx.swapchain_render_semaphores[g_ctx.image_index];
-    // ImGui draws into the swapchain rendering left open by blit_to_screen.
-    end_rendering_if_active();
-    transition_swapchain_to_present();
-    vk_check(vkEndCommandBuffer(frame.command_buffer));
+    InFlightFrame& frame = gCtx.frames[gCtx.frameIndex];
+    VkSemaphore& renderSem = gCtx.swapchainRenderSemaphores[gCtx.imageIndex];
+    // ImGui draws into the swapchain rendering left open by blitToScreen.
+    endRenderingIfActive();
+    transitionSwapchainToPresent();
+    vkCheck(vkEndCommandBuffer(frame.commandBuffer));
 
     const VkSemaphoreSubmitInfo wait{
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
         .semaphore = frame.acquire,
         .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
     };
-    const VkCommandBufferSubmitInfo cmd_info{
+    const VkCommandBufferSubmitInfo cmdInfo{
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-        .commandBuffer = frame.command_buffer,
+        .commandBuffer = frame.commandBuffer,
     };
     const VkSemaphoreSubmitInfo signal{
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-        .semaphore = render_sem,
+        .semaphore = renderSem,
         .stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
     };
     const VkSubmitInfo2 submit{
@@ -1232,102 +1232,102 @@ void end_frame() {
         .waitSemaphoreInfoCount = 1,
         .pWaitSemaphoreInfos = &wait,
         .commandBufferInfoCount = 1,
-        .pCommandBufferInfos = &cmd_info,
+        .pCommandBufferInfos = &cmdInfo,
         .signalSemaphoreInfoCount = 1,
         .pSignalSemaphoreInfos = &signal,
     };
-    vk_check(vkQueueSubmit2(g_ctx.graphics_queue, 1, &submit, frame.submitted));
+    vkCheck(vkQueueSubmit2(gCtx.graphicsQueue, 1, &submit, frame.submitted));
 
     const VkPresentInfoKHR present{
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &render_sem,
+        .pWaitSemaphores = &renderSem,
         .swapchainCount = 1,
-        .pSwapchains = &g_ctx.swapchain,
-        .pImageIndices = &g_ctx.image_index,
+        .pSwapchains = &gCtx.swapchain,
+        .pImageIndices = &gCtx.imageIndex,
     };
-    const VkResult presented = vkQueuePresentKHR(g_ctx.graphics_queue, &present);
+    const VkResult presented = vkQueuePresentKHR(gCtx.graphicsQueue, &present);
     if(presented == VK_ERROR_OUT_OF_DATE_KHR || presented == VK_SUBOPTIMAL_KHR) {
-        recreate_swapchain();
+        recreateSwapchain();
     } else {
-        vk_check(presented);
+        vkCheck(presented);
     }
 
-    g_ctx.frame_active = false;
-    g_ctx.frame_index = (g_ctx.frame_index + 1) % frames_in_flight;
+    gCtx.frameActive = false;
+    gCtx.frameIndex = (gCtx.frameIndex + 1) % framesInFlight;
 }
 
-void vk_destroy() {
-    if(g_ctx.device) {
-        wait_for_gpu_idle();
-        flush_all_deletions();
+void vkDestroy() {
+    if(gCtx.device) {
+        waitForGpuIdle();
+        flushAllDeletions();
     }
-    destroy_frames();
-    destroy_timestamp_pools();
-    destroy_swapchain();
-    if(g_ctx.immediate_pool) {
-        vkDestroyCommandPool(g_ctx.device, g_ctx.immediate_pool, nullptr);
-        g_ctx.immediate_pool = VK_NULL_HANDLE;
+    destroyFrames();
+    destroyTimestampPools();
+    destroySwapchain();
+    if(gCtx.immediatePool) {
+        vkDestroyCommandPool(gCtx.device, gCtx.immediatePool, nullptr);
+        gCtx.immediatePool = VK_NULL_HANDLE;
     }
-    if(g_ctx.frame_descriptor_pool) {
-        vkDestroyDescriptorPool(g_ctx.device, g_ctx.frame_descriptor_pool, nullptr);
-        g_ctx.frame_descriptor_pool = VK_NULL_HANDLE;
-        for(InFlightFrame& frame : g_ctx.frames) {
-            frame.frame_descriptor_set = VK_NULL_HANDLE;
+    if(gCtx.frameDescriptorPool) {
+        vkDestroyDescriptorPool(gCtx.device, gCtx.frameDescriptorPool, nullptr);
+        gCtx.frameDescriptorPool = VK_NULL_HANDLE;
+        for(InFlightFrame& frame : gCtx.frames) {
+            frame.frameDescriptorSet = VK_NULL_HANDLE;
         }
     }
-    if(g_ctx.fallback_sampled_view) {
-        vkDestroyImageView(g_ctx.device, g_ctx.fallback_sampled_view, nullptr);
-        g_ctx.fallback_sampled_view = VK_NULL_HANDLE;
+    if(gCtx.fallbackSampledView) {
+        vkDestroyImageView(gCtx.device, gCtx.fallbackSampledView, nullptr);
+        gCtx.fallbackSampledView = VK_NULL_HANDLE;
     }
-    if(g_ctx.fallback_sampled_image) {
-        vmaDestroyImage(g_ctx.allocator, g_ctx.fallback_sampled_image, g_ctx.fallback_sampled_allocation);
-        g_ctx.fallback_sampled_image = VK_NULL_HANDLE;
-        g_ctx.fallback_sampled_allocation = nullptr;
+    if(gCtx.fallbackSampledImage) {
+        vmaDestroyImage(gCtx.allocator, gCtx.fallbackSampledImage, gCtx.fallbackSampledAllocation);
+        gCtx.fallbackSampledImage = VK_NULL_HANDLE;
+        gCtx.fallbackSampledAllocation = nullptr;
     }
-    if(g_ctx.sampler_repeat) {
-        vkDestroySampler(g_ctx.device, g_ctx.sampler_repeat, nullptr);
-        g_ctx.sampler_repeat = VK_NULL_HANDLE;
+    if(gCtx.samplerRepeat) {
+        vkDestroySampler(gCtx.device, gCtx.samplerRepeat, nullptr);
+        gCtx.samplerRepeat = VK_NULL_HANDLE;
     }
-    if(g_ctx.sampler_clamp) {
-        vkDestroySampler(g_ctx.device, g_ctx.sampler_clamp, nullptr);
-        g_ctx.sampler_clamp = VK_NULL_HANDLE;
+    if(gCtx.samplerClamp) {
+        vkDestroySampler(gCtx.device, gCtx.samplerClamp, nullptr);
+        gCtx.samplerClamp = VK_NULL_HANDLE;
     }
-    if(g_ctx.pipeline_layout) {
-        vkDestroyPipelineLayout(g_ctx.device, g_ctx.pipeline_layout, nullptr);
-        g_ctx.pipeline_layout = VK_NULL_HANDLE;
+    if(gCtx.pipelineLayout) {
+        vkDestroyPipelineLayout(gCtx.device, gCtx.pipelineLayout, nullptr);
+        gCtx.pipelineLayout = VK_NULL_HANDLE;
     }
-    if(g_ctx.pass_set_layout) {
-        vkDestroyDescriptorSetLayout(g_ctx.device, g_ctx.pass_set_layout, nullptr);
-        g_ctx.pass_set_layout = VK_NULL_HANDLE;
+    if(gCtx.passSetLayout) {
+        vkDestroyDescriptorSetLayout(gCtx.device, gCtx.passSetLayout, nullptr);
+        gCtx.passSetLayout = VK_NULL_HANDLE;
     }
-    if(g_ctx.frame_set_layout) {
-        vkDestroyDescriptorSetLayout(g_ctx.device, g_ctx.frame_set_layout, nullptr);
-        g_ctx.frame_set_layout = VK_NULL_HANDLE;
+    if(gCtx.frameSetLayout) {
+        vkDestroyDescriptorSetLayout(gCtx.device, gCtx.frameSetLayout, nullptr);
+        gCtx.frameSetLayout = VK_NULL_HANDLE;
     }
-    if(g_ctx.allocator) {
-        vmaDestroyAllocator(g_ctx.allocator);
-        g_ctx.allocator = VK_NULL_HANDLE;
+    if(gCtx.allocator) {
+        vmaDestroyAllocator(gCtx.allocator);
+        gCtx.allocator = VK_NULL_HANDLE;
     }
-    if(g_ctx.device) {
-        vkDestroyDevice(g_ctx.device, nullptr);
-        g_ctx.device = VK_NULL_HANDLE;
+    if(gCtx.device) {
+        vkDestroyDevice(gCtx.device, nullptr);
+        gCtx.device = VK_NULL_HANDLE;
     }
-    if(g_ctx.surface) {
-        vkDestroySurfaceKHR(g_ctx.instance, g_ctx.surface, nullptr);
-        g_ctx.surface = VK_NULL_HANDLE;
+    if(gCtx.surface) {
+        vkDestroySurfaceKHR(gCtx.instance, gCtx.surface, nullptr);
+        gCtx.surface = VK_NULL_HANDLE;
     }
 #ifdef NEBULA_DEBUG
-    if(g_ctx.debug_messenger) {
-        vkDestroyDebugUtilsMessengerEXT(g_ctx.instance, g_ctx.debug_messenger, nullptr);
-        g_ctx.debug_messenger = VK_NULL_HANDLE;
+    if(gCtx.debugMessenger) {
+        vkDestroyDebugUtilsMessengerEXT(gCtx.instance, gCtx.debugMessenger, nullptr);
+        gCtx.debugMessenger = VK_NULL_HANDLE;
     }
 #endif
-    if(g_ctx.instance) {
-        vkDestroyInstance(g_ctx.instance, nullptr);
-        g_ctx.instance = VK_NULL_HANDLE;
+    if(gCtx.instance) {
+        vkDestroyInstance(gCtx.instance, nullptr);
+        gCtx.instance = VK_NULL_HANDLE;
     }
-    g_ctx = {};
+    gCtx = {};
 }
 
 }

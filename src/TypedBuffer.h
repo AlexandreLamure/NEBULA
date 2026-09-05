@@ -18,13 +18,13 @@ class TypedBuffer : public ByteBuffer {
         TypedBuffer(const T* data, size_t count) : ByteBuffer(data, count * sizeof(T)) {
         }
 
-        size_t element_count() const {
-            DEBUG_ASSERT(byte_size() % sizeof(T) == 0);
-            return byte_size() / sizeof(T);
+        size_t elementCount() const {
+            DEBUG_ASSERT(byteSize() % sizeof(T) == 0);
+            return byteSize() / sizeof(T);
         }
 
         BufferMapping<T> map(AccessType access = AccessType::ReadWrite) {
-            return BufferMapping<T>(ByteBuffer::map_internal(access), byte_size(), allocation(), mapping_needs_flush());
+            return BufferMapping<T>(ByteBuffer::mapInternal(access), byteSize(), allocation(), mappingNeedsFlush());
         }
 };
 

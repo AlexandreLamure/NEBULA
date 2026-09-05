@@ -19,8 +19,8 @@ namespace shader {
 // compiler padding. glm::vec3 is 12 bytes, so `vec3 + float` is 16 — a match.
 
 struct CameraData {
-    glm::mat4 view_proj;
-    glm::mat4 inv_view_proj;
+    glm::mat4 viewProj;
+    glm::mat4 invViewProj;
     glm::vec3 position;
     float padding;
 };
@@ -28,11 +28,11 @@ struct CameraData {
 struct FrameData {
     CameraData camera;
 
-    glm::vec3 sun_dir;
-    u32 point_light_count;
+    glm::vec3 sunDir;
+    u32 pointLightCount;
 
-    glm::vec3 sun_color;
-    float ibl_intensity;
+    glm::vec3 sunColor;
+    float iblIntensity;
 };
 
 struct PointLight {

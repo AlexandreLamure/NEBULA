@@ -12,16 +12,16 @@
 namespace nebula {
 
 static_assert(offsetof(PushConstants, model) == 0);
-static_assert(offsetof(PushConstants, base_color_factor) == 64);
-static_assert(offsetof(PushConstants, alpha_cutoff) == 76);
-static_assert(offsetof(PushConstants, metal_rough_factor) == 80);
-static_assert(offsetof(PushConstants, viewport_size) == 88);
-static_assert(offsetof(PushConstants, emissive_factor) == 96);
+static_assert(offsetof(PushConstants, baseColorFactor) == 64);
+static_assert(offsetof(PushConstants, alphaCutoff) == 76);
+static_assert(offsetof(PushConstants, metalRoughFactor) == 80);
+static_assert(offsetof(PushConstants, viewportSize) == 88);
+static_assert(offsetof(PushConstants, emissiveFactor) == 96);
 static_assert(offsetof(PushConstants, intensity) == 108);
 static_assert(offsetof(PushConstants, exposure) == 112);
 static_assert(sizeof(PushConstants) <= 128);
 
-static std::string module_name_from_file(const std::string& file) {
+static std::string moduleNameFromFile(const std::string& file) {
     std::string name = file;
     const auto slash = name.find_last_of("/\\");
     if(slash != std::string::npos) {
@@ -34,23 +34,23 @@ static std::string module_name_from_file(const std::string& file) {
     return name;
 }
 
-// Maps HASH("uniform_name") onto a byte offset in the PushConstants blob (Vulkan has no named uniforms).
-static int uniform_offset(u32 hash) {
+// Maps HASH("uniformName") onto a byte offset in the PushConstants blob (Vulkan has no named uniforms).
+static int uniformOffset(u32 hash) {
     switch(hash) {
-        case str_hash("model"): return int(offsetof(PushConstants, model));
-        case str_hash("base_color_factor"): return int(offsetof(PushConstants, base_color_factor));
-        case str_hash("alpha_cutoff"): return int(offsetof(PushConstants, alpha_cutoff));
-        case str_hash("metal_rough_factor"): return int(offsetof(PushConstants, metal_rough_factor));
-        case str_hash("viewport_size"): return int(offsetof(PushConstants, viewport_size));
-        case str_hash("emissive_factor"): return int(offsetof(PushConstants, emissive_factor));
-        case str_hash("intensity"): return int(offsetof(PushConstants, intensity));
-        case str_hash("exposure"): return int(offsetof(PushConstants, exposure));
+        case strHash("model"): return int(offsetof(PushConstants, model));
+        case strHash("baseColorFactor"): return int(offsetof(PushConstants, baseColorFactor));
+        case strHash("alphaCutoff"): return int(offsetof(PushConstants, alphaCutoff));
+        case strHash("metalRoughFactor"): return int(offsetof(PushConstants, metalRoughFactor));
+        case strHash("viewportSize"): return int(offsetof(PushConstants, viewportSize));
+        case strHash("emissiveFactor"): return int(offsetof(PushConstants, emissiveFactor));
+        case strHash("intensity"): return int(offsetof(PushConstants, intensity));
+        case strHash("exposure"): return int(offsetof(PushConstants, exposure));
         default: return -1;
     }
 }
 
-void PushConstants::write(u32 name_hash, const void* data, u32 size) {
-    const int off = uniform_offset(name_hash);
+void PushConstants::write(u32 nameHash, const void* data, u32 size) {
+    const int off = uniformOffset(nameHash);
     if(off < 0) {
         return;
     }
@@ -58,13 +58,13 @@ void PushConstants::write(u32 name_hash, const void* data, u32 size) {
     std::memcpy(reinterpret_cast<u8*>(this) + off, data, size);
 }
 
-void PushConstants::set(u32 name_hash, const UniformValue& value) {
+void PushConstants::set(u32 nameHash, const UniformValue& value) {
     std::visit([&](const auto& v) {
-        write(name_hash, &v, sizeof(v));
+        write(nameHash, &v, sizeof(v));
     }, value);
 }
 
-static bool file_exists(const std::string& path) {
+static bool fileExists(const std::string& path) {
     if(FILE* file = std::fopen(path.c_str(), "rb")) {
         std::fclose(file);
         return true;
@@ -72,13 +72,13 @@ static bool file_exists(const std::string& path) {
     return false;
 }
 
-static std::string spirv_path(const std::string& file) {
-    const std::string path = std::string(NEBULA_SHADER_PATH) + module_name_from_file(file) + ".spv";
-    ALWAYS_ASSERT(file_exists(path), ("Unable to find SPIR-V: \"" + path + '"').c_str());
+static std::string spirvPath(const std::string& file) {
+    const std::string path = std::string(NEBULA_SHADER_PATH) + moduleNameFromFile(file) + ".spv";
+    ALWAYS_ASSERT(fileExists(path), ("Unable to find SPIR-V: \"" + path + '"').c_str());
     return path;
 }
 
-static std::vector<u32> load_spirv(const std::string& path) {
+static std::vector<u32> loadSpirv(const std::string& path) {
     FILE* file = std::fopen(path.c_str(), "rb");
     ALWAYS_ASSERT(file, ("Unable to read SPIR-V: \"" + path + '"').c_str());
     DEFER(std::fclose(file));
@@ -93,38 +93,38 @@ static std::vector<u32> load_spirv(const std::string& path) {
     return words;
 }
 
-static VkShaderModule create_shader_module(const std::vector<u32>& spirv) {
+static VkShaderModule createShaderModule(const std::vector<u32>& spirv) {
     const VkShaderModuleCreateInfo ci{
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
         .codeSize = spirv.size() * sizeof(u32),
         .pCode = spirv.data(),
     };
     VkShaderModule module = VK_NULL_HANDLE;
-    vk_check(vkCreateShaderModule(vk_device(), &ci, nullptr, &module));
+    vkCheck(vkCreateShaderModule(vkDevice(), &ci, nullptr, &module));
     return module;
 }
 
 // Packs blend, vertex layout, and attachment formats into a u32 used to cache pipeline variants.
-static u32 pipeline_key(bool alpha_blend, VertexLayout vertex_layout) {
-    return u32(alpha_blend)
-         | (u32(vertex_layout) << 1)
-         | (u32(ctx().rendering_color_format) << 4)
-         | (u32(ctx().rendering_depth_format) << 16);
+static u32 pipelineKey(bool alphaBlend, VertexLayout vertexLayout) {
+    return u32(alphaBlend)
+         | (u32(vertexLayout) << 1)
+         | (u32(ctx().renderingColorFormat) << 4)
+         | (u32(ctx().renderingDepthFormat) << 16);
 }
 
-static VkPipeline create_graphics_pipeline(VkShaderModule vert, VkShaderModule frag, bool alpha_blend, VertexLayout vertex_layout) {
+static VkPipeline createGraphicsPipeline(VkShaderModule vert, VkShaderModule frag, bool alphaBlend, VertexLayout vertexLayout) {
     const VkPipelineShaderStageCreateInfo stages[] = {
         {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_VERTEX_BIT,
             .module = vert,
-            .pName = "vertex_main",
+            .pName = "vertexMain",
         },
         {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
             .module = frag,
-            .pName = "fragment_main",
+            .pName = "fragmentMain",
         },
     };
 
@@ -135,36 +135,36 @@ static VkPipeline create_graphics_pipeline(VkShaderModule vert, VkShaderModule f
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
     };
     VkVertexInputAttributeDescription attrs[5] = {};
-    u32 attr_count = 0;
+    u32 attrCount = 0;
 
-    if(vertex_layout == VertexLayout::Mesh) {
+    if(vertexLayout == VertexLayout::Mesh) {
         binding.stride = u32(sizeof(Vertex));
         attrs[0] = {0, 0, VK_FORMAT_R32G32B32_SFLOAT, u32(offsetof(Vertex, position))};
         attrs[1] = {1, 0, VK_FORMAT_R32G32B32_SFLOAT, u32(offsetof(Vertex, normal))};
         attrs[2] = {2, 0, VK_FORMAT_R32G32_SFLOAT, u32(offsetof(Vertex, uv))};
-        attrs[3] = {3, 0, VK_FORMAT_R32G32B32A32_SFLOAT, u32(offsetof(Vertex, tangent_bitangent_sign))};
+        attrs[3] = {3, 0, VK_FORMAT_R32G32B32A32_SFLOAT, u32(offsetof(Vertex, tangentBitangentSign))};
         attrs[4] = {4, 0, VK_FORMAT_R32G32B32_SFLOAT, u32(offsetof(Vertex, color))};
-        attr_count = 5;
-    } else if(vertex_layout == VertexLayout::ImGui) {
+        attrCount = 5;
+    } else if(vertexLayout == VertexLayout::ImGui) {
         // Packed like ImDrawVert: float2 pos, float2 uv, RGBA8 unorm (20 bytes).
         binding.stride = 20;
         attrs[0] = {0, 0, VK_FORMAT_R32G32_SFLOAT, 0};
         attrs[1] = {1, 0, VK_FORMAT_R32G32_SFLOAT, 8};
         attrs[2] = {2, 0, VK_FORMAT_R8G8B8A8_UNORM, 16};
-        attr_count = 3;
+        attrCount = 3;
     }
 
-    VkPipelineVertexInputStateCreateInfo vertex_input_state{
+    VkPipelineVertexInputStateCreateInfo vertexInputState{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
     };
-    if(attr_count) {
-        vertex_input_state.vertexBindingDescriptionCount = 1;
-        vertex_input_state.pVertexBindingDescriptions = &binding;
-        vertex_input_state.vertexAttributeDescriptionCount = attr_count;
-        vertex_input_state.pVertexAttributeDescriptions = attrs;
+    if(attrCount) {
+        vertexInputState.vertexBindingDescriptionCount = 1;
+        vertexInputState.pVertexBindingDescriptions = &binding;
+        vertexInputState.vertexAttributeDescriptionCount = attrCount;
+        vertexInputState.pVertexAttributeDescriptions = attrs;
     }
 
-    const VkPipelineInputAssemblyStateCreateInfo input_assembly{
+    const VkPipelineInputAssemblyStateCreateInfo inputAssembly{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
         .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     };
@@ -195,8 +195,8 @@ static VkPipeline create_graphics_pipeline(VkShaderModule vert, VkShaderModule f
         .depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL,
     };
 
-    VkPipelineColorBlendAttachmentState blend_attachment{
-        .blendEnable = alpha_blend ? VK_TRUE : VK_FALSE,
+    VkPipelineColorBlendAttachmentState blendAttachment{
+        .blendEnable = alphaBlend ? VK_TRUE : VK_FALSE,
         .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
         .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
         .colorBlendOp = VK_BLEND_OP_ADD,
@@ -206,13 +206,13 @@ static VkPipeline create_graphics_pipeline(VkShaderModule vert, VkShaderModule f
         .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
                         | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
     };
-    const VkPipelineColorBlendStateCreateInfo color_blend{
+    const VkPipelineColorBlendStateCreateInfo colorBlend{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
         .attachmentCount = 1,
-        .pAttachments = &blend_attachment,
+        .pAttachments = &blendAttachment,
     };
 
-    const VkDynamicState dynamic_states[] = {
+    const VkDynamicState dynamicStates[] = {
         VK_DYNAMIC_STATE_VIEWPORT,
         VK_DYNAMIC_STATE_SCISSOR,
         VK_DYNAMIC_STATE_CULL_MODE,
@@ -222,34 +222,34 @@ static VkPipeline create_graphics_pipeline(VkShaderModule vert, VkShaderModule f
     const VkPipelineDynamicStateCreateInfo dynamic{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
         .dynamicStateCount = 5,
-        .pDynamicStates = dynamic_states,
+        .pDynamicStates = dynamicStates,
     };
 
     const VkPipelineRenderingCreateInfo rendering{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
         .colorAttachmentCount = 1,
-        .pColorAttachmentFormats = &ctx().rendering_color_format,
-        .depthAttachmentFormat = ctx().rendering_depth_format,
+        .pColorAttachmentFormats = &ctx().renderingColorFormat,
+        .depthAttachmentFormat = ctx().renderingDepthFormat,
     };
 
-    const VkGraphicsPipelineCreateInfo pipeline_ci{
+    const VkGraphicsPipelineCreateInfo pipelineCi{
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .pNext = &rendering,
         .stageCount = 2,
         .pStages = stages,
-        .pVertexInputState = &vertex_input_state,
-        .pInputAssemblyState = &input_assembly,
+        .pVertexInputState = &vertexInputState,
+        .pInputAssemblyState = &inputAssembly,
         .pViewportState = &viewport,
         .pRasterizationState = &raster,
         .pMultisampleState = &multisample,
         .pDepthStencilState = &depth,
-        .pColorBlendState = &color_blend,
+        .pColorBlendState = &colorBlend,
         .pDynamicState = &dynamic,
-        .layout = ctx().pipeline_layout,
+        .layout = ctx().pipelineLayout,
     };
 
     VkPipeline pipeline = VK_NULL_HANDLE;
-    vk_check(vkCreateGraphicsPipelines(vk_device(), VK_NULL_HANDLE, 1, &pipeline_ci, nullptr, &pipeline));
+    vkCheck(vkCreateGraphicsPipelines(vkDevice(), VK_NULL_HANDLE, 1, &pipelineCi, nullptr, &pipeline));
     return pipeline;
 }
 
@@ -264,61 +264,61 @@ Program& Program::operator=(Program&& other) {
 }
 
 void Program::swap(Program& other) {
-    std::swap(_vert_module, other._vert_module);
-    std::swap(_frag_module, other._frag_module);
-    std::swap(_comp_module, other._comp_module);
-    std::swap(_compute_pipeline, other._compute_pipeline);
+    std::swap(_vertModule, other._vertModule);
+    std::swap(_fragModule, other._fragModule);
+    std::swap(_compModule, other._compModule);
+    std::swap(_computePipeline, other._computePipeline);
     std::swap(_pipelines, other._pipelines);
-    std::swap(_is_compute, other._is_compute);
+    std::swap(_isCompute, other._isCompute);
 }
 
 Program::Program(const std::string& vert, const std::string& frag) {
-    load_graphics(vert, frag);
+    loadGraphics(vert, frag);
 }
 
-Program::Program(const std::string& comp) : _is_compute(true) {
-    load_compute(comp);
+Program::Program(const std::string& comp) : _isCompute(true) {
+    loadCompute(comp);
 }
 
-void Program::load_graphics(const std::string& vert, const std::string& frag) {
-    _vert_module = create_shader_module(load_spirv(spirv_path(vert)));
-    _frag_module = create_shader_module(load_spirv(spirv_path(frag)));
+void Program::loadGraphics(const std::string& vert, const std::string& frag) {
+    _vertModule = createShaderModule(loadSpirv(spirvPath(vert)));
+    _fragModule = createShaderModule(loadSpirv(spirvPath(frag)));
 }
 
-void Program::load_compute(const std::string& comp) {
-    _comp_module = create_shader_module(load_spirv(spirv_path(comp)));
+void Program::loadCompute(const std::string& comp) {
+    _compModule = createShaderModule(loadSpirv(spirvPath(comp)));
 
-    const VkComputePipelineCreateInfo pipeline_ci{
+    const VkComputePipelineCreateInfo pipelineCi{
         .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-            .module = _comp_module,
-            .pName = "compute_main",
+            .module = _compModule,
+            .pName = "computeMain",
         },
-        .layout = ctx().pipeline_layout,
+        .layout = ctx().pipelineLayout,
     };
-    vk_check(vkCreateComputePipelines(vk_device(), VK_NULL_HANDLE, 1, &pipeline_ci, nullptr, &_compute_pipeline));
+    vkCheck(vkCreateComputePipelines(vkDevice(), VK_NULL_HANDLE, 1, &pipelineCi, nullptr, &_computePipeline));
 }
 
 void Program::destroy() {
-    if(!vk_device()) {
+    if(!vkDevice()) {
         return;
     }
 
     // Enqueue in creation order so reverse flush destroys pipelines before modules.
-    defer_destroy(_vert_module);
-    defer_destroy(_frag_module);
-    defer_destroy(_comp_module);
-    defer_destroy(_compute_pipeline);
+    deferDestroy(_vertModule);
+    deferDestroy(_fragModule);
+    deferDestroy(_compModule);
+    deferDestroy(_computePipeline);
     for(CachedPipeline& cached : _pipelines) {
-        defer_destroy(cached.pipeline);
+        deferDestroy(cached.pipeline);
     }
 
-    _vert_module = VK_NULL_HANDLE;
-    _frag_module = VK_NULL_HANDLE;
-    _comp_module = VK_NULL_HANDLE;
-    _compute_pipeline = VK_NULL_HANDLE;
+    _vertModule = VK_NULL_HANDLE;
+    _fragModule = VK_NULL_HANDLE;
+    _compModule = VK_NULL_HANDLE;
+    _computePipeline = VK_NULL_HANDLE;
     _pipelines.clear();
 }
 
@@ -326,40 +326,40 @@ Program::~Program() {
     destroy();
 }
 
-VkPipeline Program::get_or_create_pipeline(bool alpha_blend, VertexLayout layout) const {
-    const u32 key = pipeline_key(alpha_blend, layout);
+VkPipeline Program::getOrCreatePipeline(bool alphaBlend, VertexLayout layout) const {
+    const u32 key = pipelineKey(alphaBlend, layout);
     for(const CachedPipeline& cached : _pipelines) {
         if(cached.key == key) {
             return cached.pipeline;
         }
     }
 
-    const VkPipeline pipeline = create_graphics_pipeline(
-        _vert_module,
-        _frag_module,
-        alpha_blend,
+    const VkPipeline pipeline = createGraphicsPipeline(
+        _vertModule,
+        _fragModule,
+        alphaBlend,
         layout
     );
     _pipelines.push_back({key, pipeline});
     return pipeline;
 }
 
-void Program::bind_graphics(const RasterState& raster, VertexLayout layout, const PushConstants& push) const {
-    DEBUG_ASSERT(!_is_compute);
-    if(!vk_is_recording()) {
+void Program::bindGraphics(const RasterState& raster, VertexLayout layout, const PushConstants& push) const {
+    DEBUG_ASSERT(!_isCompute);
+    if(!vkIsRecording()) {
         return;
     }
 
-    const VkCommandBuffer cmd = vk_command_buffer();
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, get_or_create_pipeline(raster.alpha_blend, layout));
-    vkCmdSetCullMode(cmd, raster.cull_mode);
-    vkCmdSetDepthTestEnable(cmd, raster.depth_test_enable ? VK_TRUE : VK_FALSE);
-    vkCmdSetDepthCompareOp(cmd, raster.depth_compare_op);
+    const VkCommandBuffer cmd = vkCommandBuffer();
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, getOrCreatePipeline(raster.alphaBlend, layout));
+    vkCmdSetCullMode(cmd, raster.cullMode);
+    vkCmdSetDepthTestEnable(cmd, raster.depthTestEnable ? VK_TRUE : VK_FALSE);
+    vkCmdSetDepthCompareOp(cmd, raster.depthCompareOp);
 
-    if(ctx().pipeline_layout) {
+    if(ctx().pipelineLayout) {
         vkCmdPushConstants(
             cmd,
-            ctx().pipeline_layout,
+            ctx().pipelineLayout,
             VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
             0,
             sizeof(push),
@@ -368,38 +368,38 @@ void Program::bind_graphics(const RasterState& raster, VertexLayout layout, cons
     }
 }
 
-void Program::bind_compute() const {
-    DEBUG_ASSERT(_is_compute);
-    if(!vk_is_recording()) {
+void Program::bindCompute() const {
+    DEBUG_ASSERT(_isCompute);
+    if(!vkIsRecording()) {
         return;
     }
-    vkCmdBindPipeline(vk_command_buffer(), VK_PIPELINE_BIND_POINT_COMPUTE, _compute_pipeline);
+    vkCmdBindPipeline(vkCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, _computePipeline);
 }
 
-bool Program::is_compute() const {
-    return _is_compute;
+bool Program::isCompute() const {
+    return _isCompute;
 }
 
-std::shared_ptr<Program> Program::from_file(const std::string& comp) {
+std::shared_ptr<Program> Program::fromFile(const std::string& comp) {
     static std::unordered_map<std::string, std::weak_ptr<Program>> loaded;
 
-    auto& weak_program = loaded[comp];
-    auto program = weak_program.lock();
+    auto& weakProgram = loaded[comp];
+    auto program = weakProgram.lock();
     if(!program) {
         program = std::make_shared<Program>(comp);
-        weak_program = program;
+        weakProgram = program;
     }
     return program;
 }
 
-std::shared_ptr<Program> Program::from_files(const std::string& vert, const std::string& frag) {
+std::shared_ptr<Program> Program::fromFiles(const std::string& vert, const std::string& frag) {
     static std::unordered_map<std::string, std::weak_ptr<Program>> loaded;
 
-    auto& weak_program = loaded[vert + '\n' + frag];
-    auto program = weak_program.lock();
+    auto& weakProgram = loaded[vert + '\n' + frag];
+    auto program = weakProgram.lock();
     if(!program) {
         program = std::make_shared<Program>(vert, frag);
-        weak_program = program;
+        weakProgram = program;
     }
     return program;
 }

@@ -3,13 +3,13 @@ import utils;
 import lighting;
 
 // Set 0 = frame (persistent). Set 1 = pass (material textures).
-[[vk::binding(1, 0)]] StructuredBuffer<PointLight> point_lights;
-[[vk::binding(2, 0)]] SamplerCube in_envmap;
-[[vk::binding(3, 0)]] Sampler2D brdf_lut;
-[[vk::binding(0, 1)]] Sampler2D in_texture;
-[[vk::binding(1, 1)]] Sampler2D in_normal_texture;
-[[vk::binding(2, 1)]] Sampler2D in_metal_rough;
-[[vk::binding(3, 1)]] Sampler2D in_emissive;
+[[vk::binding(1, 0)]] StructuredBuffer<PointLight> pointLights;
+[[vk::binding(2, 0)]] SamplerCube inEnvmap;
+[[vk::binding(3, 0)]] Sampler2D brdfLut;
+[[vk::binding(0, 1)]] Sampler2D inTexture;
+[[vk::binding(1, 1)]] Sampler2D inNormalTexture;
+[[vk::binding(2, 1)]] Sampler2D inMetalRough;
+[[vk::binding(3, 1)]] Sampler2D inEmissive;
 
 struct FSInput {
     [[vk::location(0)]] float3 normal : NORMAL;
@@ -21,66 +21,66 @@ struct FSInput {
 };
 
 [shader("fragment")]
-float4 fragment_main(FSInput input) : SV_Target {
-    const float3 normal_map = unpack_normal_map(in_normal_texture.Sample(input.uv).xy);
-    const float3 normal = normal_map.x * input.tangent +
-                          normal_map.y * input.bitangent +
-                          normal_map.z * input.normal;
+float4 fragmentMain(FSInput input) : SV_Target {
+    const float3 normalMap = unpackNormalMap(inNormalTexture.Sample(input.uv).xy);
+    const float3 normal = normalMap.x * input.tangent +
+                          normalMap.y * input.bitangent +
+                          normalMap.z * input.normal;
 
-    const float4 albedo_tex = in_texture.Sample(input.uv);
-    const float3 base_color = input.color.rgb * albedo_tex.rgb * pc.base_color_factor;
-    const float alpha = albedo_tex.a;
+    const float4 albedoTex = inTexture.Sample(input.uv);
+    const float3 baseColor = input.color.rgb * albedoTex.rgb * pc.baseColorFactor;
+    const float alpha = albedoTex.a;
 
 #ifdef ALPHA_TEST
-    if(alpha <= pc.alpha_cutoff) {
+    if(alpha <= pc.alphaCutoff) {
         discard;
     }
 #endif
 
-    const float4 metal_rough_tex = in_metal_rough.Sample(input.uv);
-    const float roughness = metal_rough_tex.g * pc.metal_rough_factor.y;
-    const float metallic = metal_rough_tex.b * pc.metal_rough_factor.x;
+    const float4 metalRoughTex = inMetalRough.Sample(input.uv);
+    const float roughness = metalRoughTex.g * pc.metalRoughFactor.y;
+    const float metallic = metalRoughTex.b * pc.metalRoughFactor.x;
 
-    const float3 to_view = (frame.camera.position - input.position);
-    const float3 view_dir = normalize(to_view);
+    const float3 toView = (frame.camera.position - input.position);
+    const float3 viewDir = normalize(toView);
 
-    float3 acc = in_emissive.Sample(input.uv).rgb * pc.emissive_factor;
-    acc += eval_ibl(in_envmap, brdf_lut, normal, view_dir, base_color, metallic, roughness) * frame.ibl_intensity;
+    float3 acc = inEmissive.Sample(input.uv).rgb * pc.emissiveFactor;
+    acc += evalIbl(inEnvmap, brdfLut, normal, viewDir, baseColor, metallic, roughness) * frame.iblIntensity;
     {
-        acc += frame.sun_color * eval_brdf(normal, view_dir, frame.sun_dir, base_color, metallic, roughness);
+        acc += frame.sunColor * evalBrdf(normal, viewDir, frame.sunDir, baseColor, metallic, roughness);
 
-        for(uint i = 0; i != frame.point_light_count; ++i) {
-            PointLight light = point_lights[i];
-            const float3 to_light = (light.position - input.position);
-            const float dist = length(to_light);
-            const float3 light_vec = to_light / dist;
+        for(uint i = 0; i != frame.pointLightCount; ++i) {
+            PointLight light = pointLights[i];
+            const float3 toLight = (light.position - input.position);
+            const float dist = length(toLight);
+            const float3 lightVec = toLight / dist;
 
             const float att = attenuation(dist, light.radius);
             if(att <= 0.0) {
                 continue;
             }
 
-            acc += eval_brdf(normal, view_dir, light_vec, base_color, metallic, roughness) * att * light.color;
+            acc += evalBrdf(normal, viewDir, lightVec, baseColor, metallic, roughness) * att * light.color;
         }
     }
 
-    float4 out_color = float4(acc, alpha);
+    float4 outColor = float4(acc, alpha);
 
 #ifdef DEBUG_NORMAL
-    out_color = float4(normal * 0.5 + 0.5, 1.0);
+    outColor = float4(normal * 0.5 + 0.5, 1.0);
 #endif
 
 #ifdef DEBUG_METAL
-    out_color = float4(metallic, metallic, metallic, 1.0);
+    outColor = float4(metallic, metallic, metallic, 1.0);
 #endif
 
 #ifdef DEBUG_ROUGH
-    out_color = float4(roughness, roughness, roughness, 1.0);
+    outColor = float4(roughness, roughness, roughness, 1.0);
 #endif
 
 #ifdef DEBUG_ENV
-    out_color = float4(in_envmap.Sample(normal).rgb, 1.0);
+    outColor = float4(inEnvmap.Sample(normal).rgb, 1.0);
 #endif
 
-    return out_color;
+    return outColor;
 }

@@ -21,7 +21,7 @@
 
 namespace nebula {
 
-static ImGuiMouseButton button_to_imgui(int button) {
+static ImGuiMouseButton buttonToImgui(int button) {
     switch(button) {
         case GLFW_MOUSE_BUTTON_LEFT: return ImGuiMouseButton_Left;
         case GLFW_MOUSE_BUTTON_RIGHT: return ImGuiMouseButton_Right;
@@ -31,8 +31,8 @@ static ImGuiMouseButton button_to_imgui(int button) {
     }
 }
 
-// https://github.com/ocornut/imgui/blob/master/backends/imgui_impl_glfw.cpp#L137
-static ImGuiKey key_to_imgui(int key) {
+// https://github.com/ocornut/imgui/blob/master/backends/imguiImplGlfw.cpp#L137
+static ImGuiKey keyToImgui(int key) {
     switch(key) {
         case GLFW_KEY_TAB: return ImGuiKey_Tab;
         case GLFW_KEY_LEFT: return ImGuiKey_LeftArrow;
@@ -144,7 +144,7 @@ static ImGuiKey key_to_imgui(int key) {
     }
 }
 
-static std::unique_ptr<Texture> create_font() {
+static std::unique_ptr<Texture> createFont() {
     ImFontAtlas* fonts = ImGui::GetIO().Fonts;
     fonts->AddFontDefault();
 
@@ -156,13 +156,13 @@ static std::unique_ptr<Texture> create_font() {
         config.OversampleH = 2;
         config.FontDataOwnedByAtlas = false;
     }
-    const ImWchar icon_ranges[] = {ICON_MIN_FA, ICON_MAX_FA, 0};
-    fonts->AddFontFromMemoryCompressedTTF(font_awesome_compressed_data, font_awesome_compressed_size, 13.0f, &config, icon_ranges);
+    const ImWchar iconRanges[] = {ICON_MIN_FA, ICON_MAX_FA, 0};
+    fonts->AddFontFromMemoryCompressedTTF(font_awesome_compressed_data, font_awesome_compressed_size, 13.0f, &config, iconRanges);
 
-    u8* font_data = nullptr;
+    u8* fontData = nullptr;
     int width = 0;
     int height = 0;
-    fonts->GetTexDataAsRGBA32(&font_data, &width, &height);
+    fonts->GetTexDataAsRGBA32(&fontData, &width, &height);
 
     const size_t bytes = 4 * width * height;
 
@@ -170,50 +170,50 @@ static std::unique_ptr<Texture> create_font() {
     data.format = ImageFormat::RGBA8_UNORM;
     data.size = glm::uvec2(width, height);
     data.data = std::make_unique<u8[]>(bytes);
-    std::copy_n(font_data, bytes, data.data.get());
+    std::copy_n(fontData, bytes, data.data.get());
 
     return std::make_unique<Texture>(data);
 }
 
 
-static void char_callback(GLFWwindow*, unsigned characted) {
+static void charCallback(GLFWwindow*, unsigned characted) {
     ImGui::GetIO().AddInputCharacter(characted);
 }
 
 
-static void key_callback(GLFWwindow*, int key, int, int action, int mods) {
+static void keyCallback(GLFWwindow*, int key, int, int action, int mods) {
     auto& io = ImGui::GetIO();
     io.AddKeyEvent(ImGuiKey_ModCtrl, (mods & GLFW_MOD_CONTROL) != 0);
     io.AddKeyEvent(ImGuiKey_ModShift, (mods & GLFW_MOD_SHIFT) != 0);
     io.AddKeyEvent(ImGuiKey_ModAlt, (mods & GLFW_MOD_ALT) != 0);
     io.AddKeyEvent(ImGuiKey_ModSuper, (mods & GLFW_MOD_SUPER) != 0);
-    io.AddKeyEvent(key_to_imgui(key), action == GLFW_PRESS);
+    io.AddKeyEvent(keyToImgui(key), action == GLFW_PRESS);
 
 }
 
-static void mouse_pos_callback(GLFWwindow*, double xpos, double ypos) {
+static void mousePosCallback(GLFWwindow*, double xpos, double ypos) {
     ImGui::GetIO().AddMousePosEvent(float(xpos), float(ypos));
 }
 
-static void mouse_button_callback(GLFWwindow*, int button, int action, int) {
-    ImGui::GetIO().AddMouseButtonEvent(button_to_imgui(button), action == GLFW_PRESS);
+static void mouseButtonCallback(GLFWwindow*, int button, int action, int) {
+    ImGui::GetIO().AddMouseButtonEvent(buttonToImgui(button), action == GLFW_PRESS);
 }
 
 ImGuiRenderer::ImGuiRenderer(GLFWwindow* window) : _window(window) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
 
-    _material.set_program(Program::from_files("imgui.slang", "imgui.slang"));
-    _material.set_depth_test_mode(DepthTestMode::None);
-    _material.set_blend_mode(BlendMode::Alpha);
-    _material.set_double_sided(true);
+    _material.setProgram(Program::fromFiles("imgui.slang", "imgui.slang"));
+    _material.setDepthTestMode(DepthTestMode::None);
+    _material.setBlendMode(BlendMode::Alpha);
+    _material.setDoubleSided(true);
 
-    _font = create_font();
+    _font = createFont();
 
-    glfwSetKeyCallback(_window, key_callback);
-    glfwSetCharCallback(_window, char_callback);
-    glfwSetCursorPosCallback(_window, mouse_pos_callback);
-    glfwSetMouseButtonCallback(_window, mouse_button_callback);
+    glfwSetKeyCallback(_window, keyCallback);
+    glfwSetCharCallback(_window, charCallback);
+    glfwSetCursorPosCallback(_window, mousePosCallback);
+    glfwSetMouseButtonCallback(_window, mouseButtonCallback);
 }
 
 void ImGuiRenderer::start() {
@@ -222,7 +222,7 @@ void ImGuiRenderer::start() {
     int w, h;
     glfwGetWindowSize(_window, &w, &h);
     io.DisplaySize = ImVec2(float(w), float(h));
-    io.DeltaTime = update_delta_time();
+    io.DeltaTime = updateDeltaTime();
     io.Fonts->TexID = _font.get();
 
     ImGui::NewFrame();
@@ -234,102 +234,102 @@ void ImGuiRenderer::finish() {
 }
 
 
-float ImGuiRenderer::update_delta_time() {
+float ImGuiRenderer::updateDeltaTime() {
     const auto now = std::chrono::high_resolution_clock::now();
     const float dt = std::chrono::duration_cast<std::chrono::duration<float>>(now - _last).count();
     _last = now;
     return dt;
 }
 
-void ImGuiRenderer::render(const ImDrawData* draw_data) {
+void ImGuiRenderer::render(const ImDrawData* drawData) {
     static_assert(sizeof(ImDrawVert) == 20);
     static_assert(offsetof(ImDrawVert, pos) == 0);
     static_assert(offsetof(ImDrawVert, uv) == 8);
     static_assert(offsetof(ImDrawVert, col) == 16);
 
-    if(!draw_data->TotalIdxCount || !draw_data->TotalVtxCount) {
+    if(!drawData->TotalIdxCount || !drawData->TotalVtxCount) {
         return;
     }
 
-    const float width = (draw_data->DisplaySize.x * draw_data->FramebufferScale.x);
-    const float height = (draw_data->DisplaySize.y * draw_data->FramebufferScale.y);
+    const float width = (drawData->DisplaySize.x * drawData->FramebufferScale.x);
+    const float height = (drawData->DisplaySize.y * drawData->FramebufferScale.y);
 
     if(width <= 0.0f || height <= 0.0f) {
         return;
     }
 
-    if(!ctx().frame_active) {
+    if(!ctx().frameActive) {
         return;
     }
 
-    const ImVec2 clip_off = draw_data->DisplayPos;
-    const ImVec2 clip_scale = draw_data->FramebufferScale;
+    const ImVec2 clipOff = drawData->DisplayPos;
+    const ImVec2 clipScale = drawData->FramebufferScale;
 
-    PushConstants push = _material.build_push_constants();
-    push.set(HASH("viewport_size"), glm::vec2(draw_data->DisplaySize.x, draw_data->DisplaySize.y));
-    const RasterState raster = _material.raster_state();
+    PushConstants push = _material.buildPushConstants();
+    push.set(HASH("viewportSize"), glm::vec2(drawData->DisplaySize.x, drawData->DisplaySize.y));
+    const RasterState raster = _material.rasterState();
 
-    TypedBuffer<ImDrawIdx> index_buffer(nullptr, draw_data->TotalIdxCount);
-    TypedBuffer<ImDrawVert> vertex_buffer(nullptr, draw_data->TotalVtxCount);
+    TypedBuffer<ImDrawIdx> indexBuffer(nullptr, drawData->TotalIdxCount);
+    TypedBuffer<ImDrawVert> vertexBuffer(nullptr, drawData->TotalVtxCount);
 
     {
-        auto indices = index_buffer.map(AccessType::WriteOnly);
-        auto vertices = vertex_buffer.map(AccessType::WriteOnly);
+        auto indices = indexBuffer.map(AccessType::WriteOnly);
+        auto vertices = vertexBuffer.map(AccessType::WriteOnly);
 
-        size_t index_offset = 0;
-        size_t vertex_offset = 0;
-        for(int c = 0; c != draw_data->CmdListsCount; ++c) {
-            const ImDrawList* cmd_list = draw_data->CmdLists[c];
-            std::copy_n(cmd_list->IdxBuffer.Data, cmd_list->IdxBuffer.Size, &indices[index_offset]);
-            std::copy_n(cmd_list->VtxBuffer.Data, cmd_list->VtxBuffer.Size, &vertices[vertex_offset]);
-            vertex_offset += cmd_list->VtxBuffer.Size;
-            index_offset += cmd_list->IdxBuffer.Size;
+        size_t indexOffset = 0;
+        size_t vertexOffset = 0;
+        for(int c = 0; c != drawData->CmdListsCount; ++c) {
+            const ImDrawList* cmdList = drawData->CmdLists[c];
+            std::copy_n(cmdList->IdxBuffer.Data, cmdList->IdxBuffer.Size, &indices[indexOffset]);
+            std::copy_n(cmdList->VtxBuffer.Data, cmdList->VtxBuffer.Size, &vertices[vertexOffset]);
+            vertexOffset += cmdList->VtxBuffer.Size;
+            indexOffset += cmdList->IdxBuffer.Size;
         }
     }
 
-    const VkBuffer vbo = vertex_buffer.vk_buffer();
-    const VkBuffer ibo = index_buffer.vk_buffer();
-    const VkIndexType index_type = sizeof(ImDrawIdx) == 2 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
-    const VkCommandBuffer cmd_buf = vk_command_buffer();
+    const VkBuffer vbo = vertexBuffer.vkBuffer();
+    const VkBuffer ibo = indexBuffer.vkBuffer();
+    const VkIndexType indexType = sizeof(ImDrawIdx) == 2 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+    const VkCommandBuffer cmdBuf = vkCommandBuffer();
 
-    u32 idx_base = 0;
-    i32 vtx_base = 0;
-    for(int c = 0; c != draw_data->CmdListsCount; ++c) {
-        const ImDrawList* cmd_list = draw_data->CmdLists[c];
+    u32 idxBase = 0;
+    i32 vtxBase = 0;
+    for(int c = 0; c != drawData->CmdListsCount; ++c) {
+        const ImDrawList* cmdList = drawData->CmdLists[c];
 
-        for(int i = 0; i != cmd_list->CmdBuffer.Size; ++i) {
-            const ImDrawCmd& cmd = cmd_list->CmdBuffer[i];
+        for(int i = 0; i != cmdList->CmdBuffer.Size; ++i) {
+            const ImDrawCmd& cmd = cmdList->CmdBuffer[i];
 
             ALWAYS_ASSERT(!cmd.UserCallback, "User callback not supported");
 
-            const ImVec2 clip_min((cmd.ClipRect.x - clip_off.x) * clip_scale.x, (cmd.ClipRect.y - clip_off.y) * clip_scale.y);
-            const ImVec2 clip_max((cmd.ClipRect.z - clip_off.x) * clip_scale.x, (cmd.ClipRect.w - clip_off.y) * clip_scale.y);
-            if(!cmd.ElemCount || clip_max.x <= clip_min.x || clip_max.y <= clip_min.y) {
+            const ImVec2 clipMin((cmd.ClipRect.x - clipOff.x) * clipScale.x, (cmd.ClipRect.y - clipOff.y) * clipScale.y);
+            const ImVec2 clipMax((cmd.ClipRect.z - clipOff.x) * clipScale.x, (cmd.ClipRect.w - clipOff.y) * clipScale.y);
+            if(!cmd.ElemCount || clipMax.x <= clipMin.x || clipMax.y <= clipMin.y) {
                 continue;
             }
 
             // Vulkan scissors are top-left origin.
             // The Y-flipped viewport does not affect scissor coordinates.
-            const i32 min_x = std::max(i32(clip_min.x), 0);
-            const i32 min_y = std::max(i32(clip_min.y), 0);
-            const i32 max_x = std::min(i32(clip_max.x), i32(width));
-            const i32 max_y = std::min(i32(clip_max.y), i32(height));
-            if(max_x <= min_x || max_y <= min_y) {
+            const i32 minX = std::max(i32(clipMin.x), 0);
+            const i32 minY = std::max(i32(clipMin.y), 0);
+            const i32 maxX = std::min(i32(clipMax.x), i32(width));
+            const i32 maxY = std::min(i32(clipMax.y), i32(height));
+            if(maxX <= minX || maxY <= minY) {
                 continue;
             }
 
             const VkRect2D scissor{
-                .offset = {min_x, min_y},
-                .extent = {u32(max_x - min_x), u32(max_y - min_y)},
+                .offset = {minX, minY},
+                .extent = {u32(maxX - minX), u32(maxY - minY)},
             };
-            vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
+            vkCmdSetScissor(cmdBuf, 0, 1, &scissor);
 
             PassResources pass{};
             if(Texture* tex = static_cast<Texture*>(cmd.TextureId)) {
                 pass.textures[0] = tex;
             }
 
-            draw_indexed(
+            drawIndexed(
                 _material.program(),
                 VertexLayout::ImGui,
                 raster,
@@ -338,14 +338,14 @@ void ImGuiRenderer::render(const ImDrawData* draw_data) {
                 vbo,
                 ibo,
                 cmd.ElemCount,
-                idx_base + cmd.IdxOffset,
-                vtx_base + i32(cmd.VtxOffset),
-                index_type
+                idxBase + cmd.IdxOffset,
+                vtxBase + i32(cmd.VtxOffset),
+                indexType
             );
         }
 
-        idx_base += u32(cmd_list->IdxBuffer.Size);
-        vtx_base += i32(cmd_list->VtxBuffer.Size);
+        idxBase += u32(cmdList->IdxBuffer.Size);
+        vtxBase += i32(cmdList->VtxBuffer.Size);
     }
 }
 

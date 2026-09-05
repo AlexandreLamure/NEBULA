@@ -20,26 +20,26 @@ namespace nebula {
 class Program;
 class Texture;
 
-static constexpr u32 frames_in_flight = 2;
+static constexpr u32 framesInFlight = 2;
 
 // Set 0 — frame (persistent, updated once per Scene::render):
 //   0: frame UBO, 1: lights SSBO, 2: env cubemap, 3: BRDF LUT
-static constexpr u32 frame_set = 0;
-static constexpr u32 frame_binding_count = 4;
-static constexpr u32 frame_ubo_binding = 0;
-static constexpr u32 frame_lights_binding = 1;
-static constexpr u32 frame_env_binding = 2;
-static constexpr u32 frame_brdf_binding = 3;
+static constexpr u32 frameSet = 0;
+static constexpr u32 frameBindingCount = 4;
+static constexpr u32 frameUboBinding = 0;
+static constexpr u32 frameLightsBinding = 1;
+static constexpr u32 frameEnvBinding = 2;
+static constexpr u32 frameBrdfBinding = 3;
 
 // Set 1 — pass (pushed each draw/dispatch):
 //   0-3: sampled textures, 4: storage image
-static constexpr u32 pass_set = 1;
-static constexpr u32 pass_texture_slot_count = 4;
-static constexpr u32 pass_storage_binding = 4;
-static constexpr u32 pass_binding_count = 5;
+static constexpr u32 passSet = 1;
+static constexpr u32 passTextureSlotCount = 4;
+static constexpr u32 passStorageBinding = 4;
+static constexpr u32 passBindingCount = 5;
 
 // Two timestamps per PROFILE_GPU zone (begin + end).
-static constexpr u32 timestamp_queries_per_frame = 1024;
+static constexpr u32 timestampQueriesPerFrame = 1024;
 
 // Vertex input is pipeline state in Vulkan (OpenGL set it per draw with glVertexAttribPointer).
 enum class VertexLayout : u32 {
@@ -49,33 +49,33 @@ enum class VertexLayout : u32 {
 };
 
 struct InFlightFrame {
-    VkCommandPool command_pool = VK_NULL_HANDLE;
-    VkCommandBuffer command_buffer = VK_NULL_HANDLE;
+    VkCommandPool commandPool = VK_NULL_HANDLE;
+    VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
     VkFence submitted = VK_NULL_HANDLE;
     VkSemaphore acquire = VK_NULL_HANDLE;
-    VkDescriptorSet frame_descriptor_set = VK_NULL_HANDLE;
+    VkDescriptorSet frameDescriptorSet = VK_NULL_HANDLE;
 };
 
 // Explicit per-draw raster intent (depth/cull are dynamic; blend selects a pipeline variant).
 struct RasterState {
-    bool alpha_blend = false;
-    bool depth_test_enable = true;
-    VkCompareOp depth_compare_op = VK_COMPARE_OP_GREATER_OR_EQUAL;
-    VkCullModeFlags cull_mode = VK_CULL_MODE_BACK_BIT;
+    bool alphaBlend = false;
+    bool depthTestEnable = true;
+    VkCompareOp depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
+    VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
 };
 
 // Set 1 resources pushed each draw/dispatch.
 struct PassResources {
-    const Texture* textures[pass_texture_slot_count] = {};
-    const Texture* storage_image = nullptr;
+    const Texture* textures[passTextureSlotCount] = {};
+    const Texture* storageImage = nullptr;
 };
 
 // Set 0 resources updated once per Scene::render.
 struct FrameResources {
     VkBuffer ubo = VK_NULL_HANDLE;
-    VkDeviceSize ubo_size = 0;
+    VkDeviceSize uboSize = 0;
     VkBuffer lights = VK_NULL_HANDLE;
-    VkDeviceSize lights_size = 0;
+    VkDeviceSize lightsSize = 0;
     const Texture* env = nullptr;
     const Texture* brdf = nullptr;
 };
@@ -96,10 +96,10 @@ struct DeletionEntry {
     union {
         VkBuffer buffer = VK_NULL_HANDLE;
         VkImage image;
-        VkImageView image_view;
+        VkImageView imageView;
         VkSampler sampler;
         VkPipeline pipeline;
-        VkShaderModule shader_module;
+        VkShaderModule shaderModule;
     };
 };
 
@@ -108,140 +108,140 @@ struct GraphicsContext {
     GLFWwindow* window = nullptr;
 
     VkInstance instance = VK_NULL_HANDLE;
-    VkDebugUtilsMessengerEXT debug_messenger = VK_NULL_HANDLE;
+    VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
     VkSurfaceKHR surface = VK_NULL_HANDLE;
 
-    VkPhysicalDevice physical_device = VK_NULL_HANDLE;
+    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkDevice device = VK_NULL_HANDLE;
 
-    u32 graphics_queue_family = 0;
-    VkQueue graphics_queue = VK_NULL_HANDLE;
+    u32 graphicsQueueFamily = 0;
+    VkQueue graphicsQueue = VK_NULL_HANDLE;
 
     VmaAllocator allocator = VK_NULL_HANDLE;
-    VkCommandPool immediate_pool = VK_NULL_HANDLE;
-    // Non-null while immediate_submit is recording; vk_command_buffer() prefers this.
-    VkCommandBuffer immediate_cmd = VK_NULL_HANDLE;
+    VkCommandPool immediatePool = VK_NULL_HANDLE;
+    // Non-null while immediateSubmit is recording; vkCommandBuffer() prefers this.
+    VkCommandBuffer immediateCmd = VK_NULL_HANDLE;
 
-    std::string device_name;
+    std::string deviceName;
 
-    VkDescriptorSetLayout frame_set_layout = VK_NULL_HANDLE;
-    VkDescriptorSetLayout pass_set_layout = VK_NULL_HANDLE;
-    VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
-    VkDescriptorPool frame_descriptor_pool = VK_NULL_HANDLE;
+    VkDescriptorSetLayout frameSetLayout = VK_NULL_HANDLE;
+    VkDescriptorSetLayout passSetLayout = VK_NULL_HANDLE;
+    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+    VkDescriptorPool frameDescriptorPool = VK_NULL_HANDLE;
 
-    VkSampler sampler_repeat = VK_NULL_HANDLE;
-    VkSampler sampler_clamp = VK_NULL_HANDLE;
-    VkImage fallback_sampled_image = VK_NULL_HANDLE;
-    VmaAllocation fallback_sampled_allocation = nullptr;
-    VkImageView fallback_sampled_view = VK_NULL_HANDLE;
+    VkSampler samplerRepeat = VK_NULL_HANDLE;
+    VkSampler samplerClamp = VK_NULL_HANDLE;
+    VkImage fallbackSampledImage = VK_NULL_HANDLE;
+    VmaAllocation fallbackSampledAllocation = nullptr;
+    VkImageView fallbackSampledView = VK_NULL_HANDLE;
 
     // Attachment formats for the active RenderPass (pipeline variant key).
-    VkFormat rendering_color_format = VK_FORMAT_B8G8R8A8_SRGB;
-    VkFormat rendering_depth_format = VK_FORMAT_UNDEFINED;
+    VkFormat renderingColorFormat = VK_FORMAT_B8G8R8A8_SRGB;
+    VkFormat renderingDepthFormat = VK_FORMAT_UNDEFINED;
 
-    std::vector<DeletionEntry> deletions[frames_in_flight];
+    std::vector<DeletionEntry> deletions[framesInFlight];
 
     VkSwapchainKHR swapchain = VK_NULL_HANDLE;
-    VkFormat swapchain_format = VK_FORMAT_B8G8R8A8_SRGB;
-    VkExtent2D swapchain_extent = {};
-    std::vector<VkImage> swapchain_images;
-    std::vector<VkImageView> swapchain_views;
+    VkFormat swapchainFormat = VK_FORMAT_B8G8R8A8_SRGB;
+    VkExtent2D swapchainExtent = {};
+    std::vector<VkImage> swapchainImages;
+    std::vector<VkImageView> swapchainViews;
     // One render-complete semaphore per swapchain image. Reusing a per-frame
-    // semaphore is invalid when image_count > frames_in_flight: present may still
+    // semaphore is invalid when imageCount > framesInFlight: present may still
     // be waiting on it for a different image index.
-    std::vector<VkSemaphore> swapchain_render_semaphores;
+    std::vector<VkSemaphore> swapchainRenderSemaphores;
 
-    InFlightFrame frames[frames_in_flight] = {};
-    VkQueryPool timestamp_pools[frames_in_flight] = {};
-    u32 timestamp_allocated[frames_in_flight] = {};
-    float timestamp_period = 1.0f;
-    u32 timestamp_valid_bits = 0;
-    u32 frame_index = 0;
-    u32 image_index = 0;
-    bool frame_active = false;
-    bool rendering_active = false;
-    bool rendering_to_swapchain = false;
+    InFlightFrame frames[framesInFlight] = {};
+    VkQueryPool timestampPools[framesInFlight] = {};
+    u32 timestampAllocated[framesInFlight] = {};
+    float timestampPeriod = 1.0f;
+    u32 timestampValidBits = 0;
+    u32 frameIndex = 0;
+    u32 imageIndex = 0;
+    bool frameActive = false;
+    bool renderingActive = false;
+    bool renderingToSwapchain = false;
     // Offscreen color attachments of the current vkCmdBeginRendering. After
     // the RenderPass ends they become SHADER_READ_ONLY so the next pass can
     // sample them. Swapchain is not a Texture.
-    Texture* rendering_colors[8] = {};
-    u32 rendering_color_count = 0;
-    // Per-frame: UNDEFINED until a swapchain RenderPass begins; PRESENT after end_frame.
-    VkImageLayout swapchain_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    Texture* renderingColors[8] = {};
+    u32 renderingColorCount = 0;
+    // Per-frame: UNDEFINED until a swapchain RenderPass begins; PRESENT after endFrame.
+    VkImageLayout swapchainLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 };
 GraphicsContext& ctx();
 
-void vk_init(GLFWwindow* window);
-void vk_destroy();
+void vkInit(GLFWwindow* window);
+void vkDestroy();
 
 // Wait until all submitted GPU work finishes. Required before recreating swapchain
 // images or offscreen attachments the GPU may still be reading/writing.
-void wait_for_gpu_idle();
+void waitForGpuIdle();
 
-inline VkInstance vk_instance() { return ctx().instance; }
-inline VkPhysicalDevice vk_physical_device() { return ctx().physical_device; }
-inline VkDevice vk_device() { return ctx().device; }
-inline VkQueue vk_queue() { return ctx().graphics_queue; }
-inline u32 vk_queue_family() { return ctx().graphics_queue_family; }
-inline VkSurfaceKHR vk_surface() { return ctx().surface; }
-inline VmaAllocator device_allocator() { return ctx().allocator; }
-inline const std::string& device_name() { return ctx().device_name; }
-inline VkCommandBuffer vk_command_buffer() {
-    if(ctx().immediate_cmd) {
-        return ctx().immediate_cmd;
+inline VkInstance vkInstance() { return ctx().instance; }
+inline VkPhysicalDevice vkPhysicalDevice() { return ctx().physicalDevice; }
+inline VkDevice vkDevice() { return ctx().device; }
+inline VkQueue vkQueue() { return ctx().graphicsQueue; }
+inline u32 vkQueueFamily() { return ctx().graphicsQueueFamily; }
+inline VkSurfaceKHR vkSurface() { return ctx().surface; }
+inline VmaAllocator deviceAllocator() { return ctx().allocator; }
+inline const std::string& deviceName() { return ctx().deviceName; }
+inline VkCommandBuffer vkCommandBuffer() {
+    if(ctx().immediateCmd) {
+        return ctx().immediateCmd;
     }
-    return ctx().frames[ctx().frame_index].command_buffer;
+    return ctx().frames[ctx().frameIndex].commandBuffer;
 }
-inline bool vk_is_recording() {
-    return ctx().immediate_cmd || ctx().frame_active;
+inline bool vkIsRecording() {
+    return ctx().immediateCmd || ctx().frameActive;
 }
-inline u32 vk_frame_index() { return ctx().frame_index; }
+inline u32 vkFrameIndex() { return ctx().frameIndex; }
 
-void vk_check_impl(VkResult result, const char* call, const char* file, int line);
-#define vk_check(call) ::nebula::vk_check_impl((call), #call, __FILE__, __LINE__)
+void vkCheckImpl(VkResult result, const char* call, const char* file, int line);
+#define vkCheck(call) ::nebula::vkCheckImpl((call), #call, __FILE__, __LINE__)
 
 // One-shot command buffer: record, submit, wait. Used for staging uploads and
 // init-time compute (BRDF LUT, env cubemap) so the result exists before the first frame.
-void immediate_submit(std::function<void(VkCommandBuffer)>&& record);
+void immediateSubmit(std::function<void(VkCommandBuffer)>&& record);
 
-void image_barrier(
+void imageBarrier(
     VkCommandBuffer cmd,
     VkImage image,
-    VkImageLayout old_layout,
-    VkImageLayout new_layout,
-    VkPipelineStageFlags2 src_stage,
-    VkAccessFlags2 src_access,
-    VkPipelineStageFlags2 dst_stage,
-    VkAccessFlags2 dst_access,
+    VkImageLayout oldLayout,
+    VkImageLayout newLayout,
+    VkPipelineStageFlags2 srcStage,
+    VkAccessFlags2 srcAccess,
+    VkPipelineStageFlags2 dstStage,
+    VkAccessFlags2 dstAccess,
     VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT
 );
 
 // Ends the current vkCmdBeginRendering if any. Offscreen color attachments
 // become SHADER_READ_ONLY so the next pass can sample them. Does not transition
-// the swapchain to PRESENT (end_frame does that after ImGui has drawn).
-void end_rendering_if_active();
+// the swapchain to PRESENT (endFrame does that after ImGui has drawn).
+void endRenderingIfActive();
 
 // Enqueue Vulkan objects tagged with the in-flight frame that may still be using them.
 // Texture (Chapter 10) will use the image/view/sampler overloads.
-void defer_destroy(VkBuffer buffer, VmaAllocation allocation);
-void defer_destroy(VkImage image, VmaAllocation allocation);
-void defer_destroy(VkImageView view);
-void defer_destroy(VkSampler sampler);
-void defer_destroy(VkPipeline pipeline);
-void defer_destroy(VkShaderModule module);
+void deferDestroy(VkBuffer buffer, VmaAllocation allocation);
+void deferDestroy(VkImage image, VmaAllocation allocation);
+void deferDestroy(VkImageView view);
+void deferDestroy(VkSampler sampler);
+void deferDestroy(VkPipeline pipeline);
+void deferDestroy(VkShaderModule module);
 
-void flush_frame_deletions(u32 frame_slot);
-void flush_all_deletions();
+void flushFrameDeletions(u32 frameSlot);
+void flushAllDeletions();
 
 // Update persistent set 0 from FrameResources and bind it (graphics bind point).
-void bind_frame(const FrameResources& frame);
+void bindFrame(const FrameResources& frame);
 
 // Push set 1 from PassResources for the next draw/dispatch.
-void push_pass_descriptors(const PassResources& pass, bool compute);
+void pushPassDescriptors(const PassResources& pass, bool compute);
 
 // Fence for this frame slot has been waited: copy timestamps into queued PROFILE_GPU
 // markers, then vkResetQueryPool so the slot can be recorded again.
-void reset_timestamp_queries();
+void resetTimestampQueries();
 
 }
 

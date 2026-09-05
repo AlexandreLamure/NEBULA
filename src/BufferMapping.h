@@ -19,9 +19,9 @@ class BufferMappingBase : NonCopyable {
         void swap(BufferMappingBase& other);
 
         VmaAllocation _allocation = nullptr;
-        size_t _byte_size = 0;
+        size_t _byteSize = 0;
         void* _data = nullptr;
-        bool _needs_flush = false;
+        bool _needsFlush = false;
 };
 
 template<typename T>
@@ -31,16 +31,16 @@ class BufferMapping : BufferMappingBase {
             return static_cast<T*>(_data);
         }
 
-        size_t byte_size() const {
-            return _byte_size;
+        size_t byteSize() const {
+            return _byteSize;
         }
 
-        size_t element_count() const {
-            return _byte_size / sizeof(T);
+        size_t elementCount() const {
+            return _byteSize / sizeof(T);
         }
 
         T& operator[](size_t index) {
-            DEBUG_ASSERT(index < element_count());
+            DEBUG_ASSERT(index < elementCount());
             return data()[index];
         }
 
@@ -50,11 +50,11 @@ class BufferMapping : BufferMappingBase {
         template<typename U>
         friend class TypedBuffer;
 
-        BufferMapping(void* data, size_t size, VmaAllocation allocation, bool needs_flush) {
+        BufferMapping(void* data, size_t size, VmaAllocation allocation, bool needsFlush) {
             _data = data;
-            _byte_size = size;
+            _byteSize = size;
             _allocation = allocation;
-            _needs_flush = needs_flush;
+            _needsFlush = needsFlush;
             ALWAYS_ASSERT(size % sizeof(T) == 0, "Element size doesn't divide buffer size");
         }
 };

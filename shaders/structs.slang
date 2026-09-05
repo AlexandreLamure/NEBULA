@@ -1,12 +1,12 @@
-// GPU-side copies of the C++ structs in shader_structs.h.
+// GPU-side copies of the C++ structs in shaderStructs.h.
 // Keep the padding: Vulkan UBOs use std140-like rules, so a float3 is followed by 4 bytes.
 // Fields are `public` so other modules can read them after `import structs;`.
 
 module structs;
 
 public struct CameraData {
-    public float4x4 view_proj;
-    public float4x4 inv_view_proj;
+    public float4x4 viewProj;
+    public float4x4 invViewProj;
     public float3 position;
     public float padding;
 };
@@ -14,11 +14,11 @@ public struct CameraData {
 public struct FrameData {
     public CameraData camera;
 
-    public float3 sun_dir;
-    public uint point_light_count;
+    public float3 sunDir;
+    public uint pointLightCount;
 
-    public float3 sun_color;
-    public float ibl_intensity;
+    public float3 sunColor;
+    public float iblIntensity;
 };
 
 public struct PointLight {
@@ -32,11 +32,11 @@ public struct PointLight {
 // Offsets must match nebula::PushConstants in Program.h.
 public struct PushConstants {
     public float4x4 model;
-    public float3 base_color_factor;
-    public float alpha_cutoff;
-    public float2 metal_rough_factor;
-    public float2 viewport_size;
-    public float3 emissive_factor;
+    public float3 baseColorFactor;
+    public float alphaCutoff;
+    public float2 metalRoughFactor;
+    public float2 viewportSize;
+    public float3 emissiveFactor;
     public float intensity;
     public float exposure;
 };

@@ -21,32 +21,32 @@ enum class AccessType {
     ReadWrite
 };
 
-void init_graphics(GLFWwindow* window);
-void destroy_graphics();
+void initGraphics(GLFWwindow* window);
+void destroyGraphics();
 
-void begin_frame();
-void end_frame();
+void beginFrame();
+void endFrame();
 
-const Texture& brdf_lut();
+const Texture& brdfLut();
 
-void draw_mesh(
+void drawMesh(
     const Program& program,
     const RasterState& raster,
     const PassResources& pass,
     const PushConstants& push,
     VkBuffer vbo,
     VkBuffer ibo,
-    u32 index_count
+    u32 indexCount
 );
 
-void draw_fullscreen(
+void drawFullscreen(
     const Program& program,
     const RasterState& raster,
     const PassResources& pass,
     const PushConstants& push
 );
 
-void draw_indexed(
+void drawIndexed(
     const Program& program,
     VertexLayout layout,
     const RasterState& raster,
@@ -54,20 +54,20 @@ void draw_indexed(
     const PushConstants& push,
     VkBuffer vbo,
     VkBuffer ibo,
-    u32 index_count,
-    u32 first_index,
-    i32 vertex_offset,
-    VkIndexType index_type
+    u32 indexCount,
+    u32 firstIndex,
+    i32 vertexOffset,
+    VkIndexType indexType
 );
 
 void dispatch(const Program& program, const PassResources& pass, u32 x, u32 y, u32 z);
 
-void blit_to_screen(const Texture& tex);
+void blitToScreen(const Texture& tex);
 
-std::shared_ptr<Texture> default_black_texture();
-std::shared_ptr<Texture> default_white_texture();
-std::shared_ptr<Texture> default_normal_texture();
-std::shared_ptr<Texture> default_metal_rough_texture();
+std::shared_ptr<Texture> defaultBlackTexture();
+std::shared_ptr<Texture> defaultWhiteTexture();
+std::shared_ptr<Texture> defaultNormalTexture();
+std::shared_ptr<Texture> defaultMetalRoughTexture();
 
 }
 

@@ -15,34 +15,34 @@ class Scene : NonMovable {
     public:
         Scene();
 
-        static Result<std::unique_ptr<Scene>> from_gltf(const std::string& file_name);
+        static Result<std::unique_ptr<Scene>> fromGltf(const std::string& fileName);
 
         void render() const;
 
-        void add_object(SceneObject obj);
-        void add_light(PointLight obj);
+        void addObject(SceneObject obj);
+        void addLight(PointLight obj);
 
         Span<const SceneObject> objects() const;
-        Span<const PointLight> point_lights() const;
+        Span<const PointLight> pointLights() const;
 
         Camera& camera();
         const Camera& camera() const;
 
-        void set_envmap(std::shared_ptr<Texture> env);
-        void set_ibl_intensity(float intensity);
+        void setEnvmap(std::shared_ptr<Texture> env);
+        void setIblIntensity(float intensity);
 
-        void set_sun(float altitude, float azimuth, glm::vec3 color = glm::vec3(1.0f));
+        void setSun(float altitude, float azimuth, glm::vec3 color = glm::vec3(1.0f));
 
     private:
         std::vector<SceneObject> _objects;
-        std::vector<PointLight> _point_lights;
+        std::vector<PointLight> _pointLights;
 
-        glm::vec3 _sun_direction = glm::vec3(0.2f, 1.0f, 0.1f);
-        glm::vec3 _sun_color = glm::vec3(1.0f);
+        glm::vec3 _sunDirection = glm::vec3(0.2f, 1.0f, 0.1f);
+        glm::vec3 _sunColor = glm::vec3(1.0f);
 
         std::shared_ptr<Texture> _envmap;
-        float _ibl_intensity = 1.0f;
-        Material _sky_material;
+        float _iblIntensity = 1.0f;
+        Material _skyMaterial;
 
         Camera _camera;
 };

@@ -1,7 +1,7 @@
 import structs;
 import utils;
 
-[[vk::binding(0, 1)]] Sampler2D in_hdr;
+[[vk::binding(0, 1)]] Sampler2D inHdr;
 
 // Narkowicz's fitted ACES filmic curve, compressing HDR into [0,1].
 float3 aces(float3 x) {
@@ -22,9 +22,9 @@ float3 reinhard(float3 x) {
 }
 
 [shader("fragment")]
-float4 fragment_main(float2 uv : UV) : SV_Target {
-    const float3 hdr = in_hdr.SampleLevel(uv, 0).rgb * pc.exposure;
-    float3 tone_mapped = aces(hdr);
+float4 fragmentMain(float2 uv : UV) : SV_Target {
+    const float3 hdr = inHdr.SampleLevel(uv, 0).rgb * pc.exposure;
+    float3 toneMapped = aces(hdr);
 
-    return float4(tone_mapped, 1.0);
+    return float4(toneMapped, 1.0);
 }

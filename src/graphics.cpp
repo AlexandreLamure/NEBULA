@@ -18,30 +18,30 @@ namespace nebula {
 //   Set 0 (frame, persistent): frame UBO, lights SSBO, env cubemap, BRDF LUT
 //   Set 1 (pass, per-draw with push descriptors): texture slots 0-3 + storage image
 
-Texture brdf_lut_texture;
+Texture brdfLutTexture;
 
 struct {
     std::shared_ptr<Texture> black;
     std::shared_ptr<Texture> white;
     std::shared_ptr<Texture> normal;
-    std::shared_ptr<Texture> metal_rough;
-} default_textures;
+    std::shared_ptr<Texture> metalRough;
+} defaultTextures;
 
-void init_graphics(GLFWwindow* window) {
-    vk_init(window);
+void initGraphics(GLFWwindow* window) {
+    vkInit(window);
 
     {
         // Split-sum IBL: a 256² RG LUT of the BRDF scale/bias terms. Written once
-        // with a compute shader via immediate_submit before the first frame.
-        brdf_lut_texture = Texture(glm::uvec2(256), ImageFormat::RG16_UNORM, WrapMode::Clamp);
+        // with a compute shader via immediateSubmit before the first frame.
+        brdfLutTexture = Texture(glm::uvec2(256), ImageFormat::RG16_UNORM, WrapMode::Clamp);
 
-        std::shared_ptr<Program> brdf_program = Program::from_file("brdf.slang");
-        DEBUG_ASSERT(brdf_program && brdf_program->is_compute());
+        std::shared_ptr<Program> brdfProgram = Program::fromFile("brdf.slang");
+        DEBUG_ASSERT(brdfProgram && brdfProgram->isCompute());
 
-        immediate_submit([&](VkCommandBuffer cmd) {
-            image_barrier(
+        immediateSubmit([&](VkCommandBuffer cmd) {
+            imageBarrier(
                 cmd,
-                brdf_lut_texture.vk_image(),
+                brdfLutTexture.vkImage(),
                 VK_IMAGE_LAYOUT_UNDEFINED,
                 VK_IMAGE_LAYOUT_GENERAL,
                 VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
@@ -49,15 +49,15 @@ void init_graphics(GLFWwindow* window) {
                 VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                 VK_ACCESS_2_SHADER_WRITE_BIT
             );
-            brdf_lut_texture.set_vk_layout(VK_IMAGE_LAYOUT_GENERAL);
+            brdfLutTexture.setVkLayout(VK_IMAGE_LAYOUT_GENERAL);
 
             PassResources pass{};
-            pass.storage_image = &brdf_lut_texture;
-            dispatch(*brdf_program, pass, brdf_lut_texture.size().x / 8, brdf_lut_texture.size().y / 8, 1);
+            pass.storageImage = &brdfLutTexture;
+            dispatch(*brdfProgram, pass, brdfLutTexture.size().x / 8, brdfLutTexture.size().y / 8, 1);
 
-            image_barrier(
+            imageBarrier(
                 cmd,
-                brdf_lut_texture.vk_image(),
+                brdfLutTexture.vkImage(),
                 VK_IMAGE_LAYOUT_GENERAL,
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
@@ -65,7 +65,7 @@ void init_graphics(GLFWwindow* window) {
                 VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                 VK_ACCESS_2_SHADER_READ_BIT
             );
-            brdf_lut_texture.set_vk_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            brdfLutTexture.setVkLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         });
     }
 
@@ -77,11 +77,11 @@ void init_graphics(GLFWwindow* window) {
 
         {
             std::memset(data.data.get(), 0, 16);
-            default_textures.black = std::make_shared<Texture>(data);
+            defaultTextures.black = std::make_shared<Texture>(data);
         }
         {
             std::memset(data.data.get(), 255, 16);
-            default_textures.white = std::make_shared<Texture>(data);
+            defaultTextures.white = std::make_shared<Texture>(data);
         }
         {
             std::memset(data.data.get(), 0, 16);
@@ -90,7 +90,7 @@ void init_graphics(GLFWwindow* window) {
                 data.data[i * 4 + 1] = 127;
                 data.data[i * 4 + 2] = 255;
             }
-            default_textures.normal = std::make_shared<Texture>(data);
+            defaultTextures.normal = std::make_shared<Texture>(data);
         }
         {
             std::memset(data.data.get(), 0, 16);
@@ -98,33 +98,33 @@ void init_graphics(GLFWwindow* window) {
                 data.data[i * 4 + 1] = u8(255.0f * 0.6f);
                 data.data[i * 4 + 2] = 0;
             }
-            default_textures.metal_rough = std::make_shared<Texture>(data);
+            defaultTextures.metalRough = std::make_shared<Texture>(data);
         }
     }
 }
 
-void destroy_graphics() {
-    brdf_lut_texture = {};
-    default_textures = {};
-    profile::destroy_profile();
+void destroyGraphics() {
+    brdfLutTexture = {};
+    defaultTextures = {};
+    profile::destroyProfile();
 
-    vk_destroy();
+    vkDestroy();
 }
 
-const Texture& brdf_lut() {
-    return brdf_lut_texture;
+const Texture& brdfLut() {
+    return brdfLutTexture;
 }
 
-void draw_mesh(
+void drawMesh(
     const Program& program,
     const RasterState& raster,
     const PassResources& pass,
     const PushConstants& push,
     VkBuffer vbo,
     VkBuffer ibo,
-    u32 index_count
+    u32 indexCount
 ) {
-    draw_indexed(
+    drawIndexed(
         program,
         VertexLayout::Mesh,
         raster,
@@ -132,33 +132,33 @@ void draw_mesh(
         push,
         vbo,
         ibo,
-        index_count,
+        indexCount,
         0,
         0,
         VK_INDEX_TYPE_UINT32
     );
 }
 
-void draw_fullscreen(
+void drawFullscreen(
     const Program& program,
     const RasterState& raster,
     const PassResources& pass,
     const PushConstants& push
 ) {
-    ALWAYS_ASSERT(ctx().rendering_active, "No active rendering pass");
+    ALWAYS_ASSERT(ctx().renderingActive, "No active rendering pass");
 
-    program.bind_graphics(raster, VertexLayout::None, push);
-    push_pass_descriptors(pass, false);
+    program.bindGraphics(raster, VertexLayout::None, push);
+    pushPassDescriptors(pass, false);
 
-    if(!ctx().frame_active && !ctx().immediate_cmd) {
+    if(!ctx().frameActive && !ctx().immediateCmd) {
         return;
     }
 
     // No vertex buffer: screen.slang uses SV_VertexID.
-    vkCmdDraw(vk_command_buffer(), 3, 1, 0, 0);
+    vkCmdDraw(vkCommandBuffer(), 3, 1, 0, 0);
 }
 
-void draw_indexed(
+void drawIndexed(
     const Program& program,
     VertexLayout layout,
     const RasterState& raster,
@@ -166,66 +166,66 @@ void draw_indexed(
     const PushConstants& push,
     VkBuffer vbo,
     VkBuffer ibo,
-    u32 index_count,
-    u32 first_index,
-    i32 vertex_offset,
-    VkIndexType index_type
+    u32 indexCount,
+    u32 firstIndex,
+    i32 vertexOffset,
+    VkIndexType indexType
 ) {
-    ALWAYS_ASSERT(ctx().rendering_active, "No active rendering pass");
+    ALWAYS_ASSERT(ctx().renderingActive, "No active rendering pass");
     ALWAYS_ASSERT(vbo && ibo, "Vertex/index buffers required");
 
-    program.bind_graphics(raster, layout, push);
-    push_pass_descriptors(pass, false);
+    program.bindGraphics(raster, layout, push);
+    pushPassDescriptors(pass, false);
 
-    if(!ctx().frame_active && !ctx().immediate_cmd) {
+    if(!ctx().frameActive && !ctx().immediateCmd) {
         return;
     }
 
-    const VkCommandBuffer cmd = vk_command_buffer();
+    const VkCommandBuffer cmd = vkCommandBuffer();
     const VkDeviceSize offset = 0;
     vkCmdBindVertexBuffers(cmd, 0, 1, &vbo, &offset);
-    vkCmdBindIndexBuffer(cmd, ibo, 0, index_type);
-    vkCmdDrawIndexed(cmd, index_count, 1, first_index, vertex_offset, 0);
+    vkCmdBindIndexBuffer(cmd, ibo, 0, indexType);
+    vkCmdDrawIndexed(cmd, indexCount, 1, firstIndex, vertexOffset, 0);
 }
 
 void dispatch(const Program& program, const PassResources& pass, u32 x, u32 y, u32 z) {
-    if(!vk_is_recording()) {
+    if(!vkIsRecording()) {
         return;
     }
-    program.bind_compute();
-    push_pass_descriptors(pass, true);
-    vkCmdDispatch(vk_command_buffer(), x, y, z);
+    program.bindCompute();
+    pushPassDescriptors(pass, true);
+    vkCmdDispatch(vkCommandBuffer(), x, y, z);
 }
 
-void blit_to_screen(const Texture& tex) {
+void blitToScreen(const Texture& tex) {
     // Expects to be called inside an active swapchain RenderPass.
-    ALWAYS_ASSERT(ctx().rendering_active && ctx().rendering_to_swapchain,
-                  "blit_to_screen requires an active swapchain RenderPass");
+    ALWAYS_ASSERT(ctx().renderingActive && ctx().renderingToSwapchain,
+                  "blitToScreen requires an active swapchain RenderPass");
 
-    const std::shared_ptr<Program> blit_program = Program::from_files("screen.slang", "passthrough.slang");
+    const std::shared_ptr<Program> blitProgram = Program::fromFiles("screen.slang", "passthrough.slang");
     PassResources pass{};
     pass.textures[0] = &tex;
     const RasterState raster{
-        .depth_test_enable = false,
-        .cull_mode = VK_CULL_MODE_NONE,
+        .depthTestEnable = false,
+        .cullMode = VK_CULL_MODE_NONE,
     };
-    draw_fullscreen(*blit_program, raster, pass, {});
+    drawFullscreen(*blitProgram, raster, pass, {});
 }
 
-std::shared_ptr<Texture> default_black_texture() {
-    return default_textures.black;
+std::shared_ptr<Texture> defaultBlackTexture() {
+    return defaultTextures.black;
 }
 
-std::shared_ptr<Texture> default_white_texture() {
-    return default_textures.white;
+std::shared_ptr<Texture> defaultWhiteTexture() {
+    return defaultTextures.white;
 }
 
-std::shared_ptr<Texture> default_normal_texture() {
-    return default_textures.normal;
+std::shared_ptr<Texture> defaultNormalTexture() {
+    return defaultTextures.normal;
 }
 
-std::shared_ptr<Texture> default_metal_rough_texture() {
-    return default_textures.metal_rough;
+std::shared_ptr<Texture> defaultMetalRoughTexture() {
+    return defaultTextures.metalRough;
 }
 
 }

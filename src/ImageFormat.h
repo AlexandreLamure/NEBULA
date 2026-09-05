@@ -8,6 +8,7 @@
 namespace nebula {
 
 enum class ImageFormat {
+
     RGBA8_UNORM,
     RGBA8_sRGB,
     RGB8_UNORM,
@@ -19,7 +20,7 @@ enum class ImageFormat {
     Depth32_FLOAT
 };
 
-VkFormat image_format_to_vk(ImageFormat format);
+VkFormat imageFormatToVk(ImageFormat format);
 
 }
 
