@@ -629,22 +629,18 @@ void flush_frame_descriptors() {
         return;
     }
 
-    const BoundBuffer& ubo = g_ctx.bound_frame_ubo.buffer
-        ? g_ctx.bound_frame_ubo
-        : BoundBuffer{g_ctx.dummy_frame_ubo, sizeof(shader::FrameData)};
-    const BoundBuffer& lights = g_ctx.bound_frame_lights.buffer
-        ? g_ctx.bound_frame_lights
-        : BoundBuffer{g_ctx.dummy_lights_ssbo, sizeof(shader::PointLight)};
+    ALWAYS_ASSERT(g_ctx.bound_frame_ubo.buffer, "frame UBO is not bound");
+    ALWAYS_ASSERT(g_ctx.bound_frame_lights.buffer, "frame lights are not bound");
 
     const VkDescriptorBufferInfo ubo_info{
-        .buffer = ubo.buffer,
+        .buffer = g_ctx.bound_frame_ubo.buffer,
         .offset = 0,
-        .range = ubo.size ? ubo.size : VK_WHOLE_SIZE,
+        .range = g_ctx.bound_frame_ubo.size,
     };
     const VkDescriptorBufferInfo lights_info{
-        .buffer = lights.buffer,
+        .buffer = g_ctx.bound_frame_lights.buffer,
         .offset = 0,
-        .range = lights.size ? lights.size : VK_WHOLE_SIZE,
+        .range = g_ctx.bound_frame_lights.size,
     };
 
     // Slots 4–5 are frame textures (env / BRDF); fall back to the 1×1 stub if unbound.
@@ -704,9 +700,9 @@ void flush_frame_descriptors() {
 }
 
 // Update descriptor bindings on-the-fly for the next draw/dispatch.
-// Alternative: one persistent set per Material + sort draws by material.
-// Pros: bind only when the material changes (less CPU than pushing every draw).
-// Cons: set/pool bookkeeping; worthless until the draw list is sorted.
+// Alternative approach: one persistent set per Material + sort draws by material.
+//  * Pros: bind only when the material changes (less CPU than pushing every draw).
+//  * Cons: set/pool bookkeeping; worthless until the draw list is sorted.
 void flush_descriptor_bindings() {
     if(!vk_is_recording() || !g_ctx.pipeline_layout || !g_ctx.pass_set_layout) {
         return;
@@ -1311,16 +1307,6 @@ void vk_destroy() {
         for(InFlightFrame& frame : g_ctx.frames) {
             frame.frame_descriptor_set = VK_NULL_HANDLE;
         }
-    }
-    if(g_ctx.dummy_frame_ubo) {
-        vmaDestroyBuffer(g_ctx.allocator, g_ctx.dummy_frame_ubo, g_ctx.dummy_frame_ubo_allocation);
-        g_ctx.dummy_frame_ubo = VK_NULL_HANDLE;
-        g_ctx.dummy_frame_ubo_allocation = nullptr;
-    }
-    if(g_ctx.dummy_lights_ssbo) {
-        vmaDestroyBuffer(g_ctx.allocator, g_ctx.dummy_lights_ssbo, g_ctx.dummy_lights_ssbo_allocation);
-        g_ctx.dummy_lights_ssbo = VK_NULL_HANDLE;
-        g_ctx.dummy_lights_ssbo_allocation = nullptr;
     }
     if(g_ctx.fallback_sampled_view) {
         vkDestroyImageView(g_ctx.device, g_ctx.fallback_sampled_view, nullptr);

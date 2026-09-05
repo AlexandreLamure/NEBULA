@@ -124,12 +124,6 @@ struct GraphicsContext {
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
     VkDescriptorPool frame_descriptor_pool = VK_NULL_HANDLE;
 
-    // Safe defaults so set 0 is always writable before Scene::render fills real buffers.
-    VkBuffer dummy_frame_ubo = VK_NULL_HANDLE;
-    VmaAllocation dummy_frame_ubo_allocation = nullptr;
-    VkBuffer dummy_lights_ssbo = VK_NULL_HANDLE;
-    VmaAllocation dummy_lights_ssbo_allocation = nullptr;
-
     VkSampler sampler_repeat = VK_NULL_HANDLE;
     VkSampler sampler_clamp = VK_NULL_HANDLE;
     VkImage fallback_sampled_image = VK_NULL_HANDLE;
